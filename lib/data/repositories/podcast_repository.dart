@@ -33,6 +33,7 @@ class PodcastRepository {
       imageUrl: Value(parsed.imageUrl),
       author: Value(parsed.author),
       description: Value(parsed.description),
+      link: Value(parsed.link),
       lastFetched: Value(DateTime.now()),
       subscribed: const Value(true),
     );
@@ -64,6 +65,7 @@ class PodcastRepository {
         imageUrl: Value(parsed.imageUrl),
         author: Value(parsed.author),
         description: Value(parsed.description),
+        link: Value(parsed.link),
         lastFetched: Value(DateTime.now()),
       ),
     );
@@ -88,6 +90,7 @@ class PodcastRepository {
             showNotes: Value(e.showNotes),
             audioUrl: Value(e.audioUrl),
             imageUrl: Value(e.imageUrl),
+            link: Value(e.link),
             durationMs: Value(e.durationMs),
             sizeBytes: Value(e.sizeBytes),
             pubDate: Value(e.pubDate),

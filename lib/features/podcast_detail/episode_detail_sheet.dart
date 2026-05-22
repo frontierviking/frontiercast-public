@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/db/database.dart';
 import '../../providers.dart';
@@ -163,6 +164,22 @@ class EpisodeDetailSheet extends ConsumerWidget {
                         ? Icons.article
                         : Icons.article_outlined,
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Share',
+                  onPressed: () {
+                    final link =
+                        (episode.link != null && episode.link!.isNotEmpty)
+                        ? episode.link!
+                        : episode.audioUrl;
+                    SharePlus.instance.share(
+                      ShareParams(
+                        text: '${episode.title}\n$link',
+                        subject: episode.title,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.share_outlined),
                 ),
                 DownloadButton(episode: episode),
                 Builder(

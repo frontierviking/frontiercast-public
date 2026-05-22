@@ -136,6 +136,15 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _linkMeta = const VerificationMeta('link');
+  @override
+  late final GeneratedColumn<String> link = GeneratedColumn<String>(
+    'link',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastFetchedMeta = const VerificationMeta(
     'lastFetched',
   );
@@ -170,6 +179,7 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
     imageUrl,
     author,
     description,
+    link,
     lastFetched,
     subscribed,
   ];
@@ -225,6 +235,12 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
         ),
       );
     }
+    if (data.containsKey('link')) {
+      context.handle(
+        _linkMeta,
+        link.isAcceptableOrUnknown(data['link']!, _linkMeta),
+      );
+    }
     if (data.containsKey('last_fetched')) {
       context.handle(
         _lastFetchedMeta,
@@ -273,6 +289,10 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      link: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link'],
+      ),
       lastFetched: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_fetched'],
@@ -297,6 +317,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
   final String? imageUrl;
   final String? author;
   final String? description;
+  final String? link;
   final DateTime? lastFetched;
   final bool subscribed;
   const Podcast({
@@ -306,6 +327,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     this.imageUrl,
     this.author,
     this.description,
+    this.link,
     this.lastFetched,
     required this.subscribed,
   });
@@ -323,6 +345,9 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     }
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || link != null) {
+      map['link'] = Variable<String>(link);
     }
     if (!nullToAbsent || lastFetched != null) {
       map['last_fetched'] = Variable<DateTime>(lastFetched);
@@ -345,6 +370,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
+      link: link == null && nullToAbsent ? const Value.absent() : Value(link),
       lastFetched: lastFetched == null && nullToAbsent
           ? const Value.absent()
           : Value(lastFetched),
@@ -364,6 +390,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       imageUrl: serializer.fromJson<String?>(json['imageUrl']),
       author: serializer.fromJson<String?>(json['author']),
       description: serializer.fromJson<String?>(json['description']),
+      link: serializer.fromJson<String?>(json['link']),
       lastFetched: serializer.fromJson<DateTime?>(json['lastFetched']),
       subscribed: serializer.fromJson<bool>(json['subscribed']),
     );
@@ -378,6 +405,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       'imageUrl': serializer.toJson<String?>(imageUrl),
       'author': serializer.toJson<String?>(author),
       'description': serializer.toJson<String?>(description),
+      'link': serializer.toJson<String?>(link),
       'lastFetched': serializer.toJson<DateTime?>(lastFetched),
       'subscribed': serializer.toJson<bool>(subscribed),
     };
@@ -390,6 +418,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     Value<String?> imageUrl = const Value.absent(),
     Value<String?> author = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    Value<String?> link = const Value.absent(),
     Value<DateTime?> lastFetched = const Value.absent(),
     bool? subscribed,
   }) => Podcast(
@@ -399,6 +428,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
     author: author.present ? author.value : this.author,
     description: description.present ? description.value : this.description,
+    link: link.present ? link.value : this.link,
     lastFetched: lastFetched.present ? lastFetched.value : this.lastFetched,
     subscribed: subscribed ?? this.subscribed,
   );
@@ -412,6 +442,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       description: data.description.present
           ? data.description.value
           : this.description,
+      link: data.link.present ? data.link.value : this.link,
       lastFetched: data.lastFetched.present
           ? data.lastFetched.value
           : this.lastFetched,
@@ -430,6 +461,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
           ..write('imageUrl: $imageUrl, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('link: $link, ')
           ..write('lastFetched: $lastFetched, ')
           ..write('subscribed: $subscribed')
           ..write(')'))
@@ -444,6 +476,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     imageUrl,
     author,
     description,
+    link,
     lastFetched,
     subscribed,
   );
@@ -457,6 +490,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
           other.imageUrl == this.imageUrl &&
           other.author == this.author &&
           other.description == this.description &&
+          other.link == this.link &&
           other.lastFetched == this.lastFetched &&
           other.subscribed == this.subscribed);
 }
@@ -468,6 +502,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
   final Value<String?> imageUrl;
   final Value<String?> author;
   final Value<String?> description;
+  final Value<String?> link;
   final Value<DateTime?> lastFetched;
   final Value<bool> subscribed;
   const PodcastsCompanion({
@@ -477,6 +512,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     this.imageUrl = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.link = const Value.absent(),
     this.lastFetched = const Value.absent(),
     this.subscribed = const Value.absent(),
   });
@@ -487,6 +523,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     this.imageUrl = const Value.absent(),
     this.author = const Value.absent(),
     this.description = const Value.absent(),
+    this.link = const Value.absent(),
     this.lastFetched = const Value.absent(),
     this.subscribed = const Value.absent(),
   }) : title = Value(title),
@@ -498,6 +535,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     Expression<String>? imageUrl,
     Expression<String>? author,
     Expression<String>? description,
+    Expression<String>? link,
     Expression<DateTime>? lastFetched,
     Expression<bool>? subscribed,
   }) {
@@ -508,6 +546,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
       if (imageUrl != null) 'image_url': imageUrl,
       if (author != null) 'author': author,
       if (description != null) 'description': description,
+      if (link != null) 'link': link,
       if (lastFetched != null) 'last_fetched': lastFetched,
       if (subscribed != null) 'subscribed': subscribed,
     });
@@ -520,6 +559,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     Value<String?>? imageUrl,
     Value<String?>? author,
     Value<String?>? description,
+    Value<String?>? link,
     Value<DateTime?>? lastFetched,
     Value<bool>? subscribed,
   }) {
@@ -530,6 +570,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
       imageUrl: imageUrl ?? this.imageUrl,
       author: author ?? this.author,
       description: description ?? this.description,
+      link: link ?? this.link,
       lastFetched: lastFetched ?? this.lastFetched,
       subscribed: subscribed ?? this.subscribed,
     );
@@ -556,6 +597,9 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     if (description.present) {
       map['description'] = Variable<String>(description.value);
     }
+    if (link.present) {
+      map['link'] = Variable<String>(link.value);
+    }
     if (lastFetched.present) {
       map['last_fetched'] = Variable<DateTime>(lastFetched.value);
     }
@@ -574,6 +618,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
           ..write('imageUrl: $imageUrl, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
+          ..write('link: $link, ')
           ..write('lastFetched: $lastFetched, ')
           ..write('subscribed: $subscribed')
           ..write(')'))
@@ -659,6 +704,15 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
   @override
   late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
     'image_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _linkMeta = const VerificationMeta('link');
+  @override
+  late final GeneratedColumn<String> link = GeneratedColumn<String>(
+    'link',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -754,6 +808,7 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
     showNotes,
     audioUrl,
     imageUrl,
+    link,
     durationMs,
     sizeBytes,
     pubDate,
@@ -819,6 +874,12 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
       context.handle(
         _imageUrlMeta,
         imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta),
+      );
+    }
+    if (data.containsKey('link')) {
+      context.handle(
+        _linkMeta,
+        link.isAcceptableOrUnknown(data['link']!, _linkMeta),
       );
     }
     if (data.containsKey('duration_ms')) {
@@ -898,6 +959,10 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
         DriftSqlType.string,
         data['${effectivePrefix}image_url'],
       ),
+      link: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}link'],
+      ),
       durationMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}duration_ms'],
@@ -948,6 +1013,7 @@ class Episode extends DataClass implements Insertable<Episode> {
   final String? showNotes;
   final String audioUrl;
   final String? imageUrl;
+  final String? link;
   final int? durationMs;
   final int? sizeBytes;
   final DateTime? pubDate;
@@ -963,6 +1029,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     this.showNotes,
     required this.audioUrl,
     this.imageUrl,
+    this.link,
     this.durationMs,
     this.sizeBytes,
     this.pubDate,
@@ -984,6 +1051,9 @@ class Episode extends DataClass implements Insertable<Episode> {
     map['audio_url'] = Variable<String>(audioUrl);
     if (!nullToAbsent || imageUrl != null) {
       map['image_url'] = Variable<String>(imageUrl);
+    }
+    if (!nullToAbsent || link != null) {
+      map['link'] = Variable<String>(link);
     }
     if (!nullToAbsent || durationMs != null) {
       map['duration_ms'] = Variable<int>(durationMs);
@@ -1020,6 +1090,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       imageUrl: imageUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(imageUrl),
+      link: link == null && nullToAbsent ? const Value.absent() : Value(link),
       durationMs: durationMs == null && nullToAbsent
           ? const Value.absent()
           : Value(durationMs),
@@ -1051,6 +1122,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       showNotes: serializer.fromJson<String?>(json['showNotes']),
       audioUrl: serializer.fromJson<String>(json['audioUrl']),
       imageUrl: serializer.fromJson<String?>(json['imageUrl']),
+      link: serializer.fromJson<String?>(json['link']),
       durationMs: serializer.fromJson<int?>(json['durationMs']),
       sizeBytes: serializer.fromJson<int?>(json['sizeBytes']),
       pubDate: serializer.fromJson<DateTime?>(json['pubDate']),
@@ -1073,6 +1145,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       'showNotes': serializer.toJson<String?>(showNotes),
       'audioUrl': serializer.toJson<String>(audioUrl),
       'imageUrl': serializer.toJson<String?>(imageUrl),
+      'link': serializer.toJson<String?>(link),
       'durationMs': serializer.toJson<int?>(durationMs),
       'sizeBytes': serializer.toJson<int?>(sizeBytes),
       'pubDate': serializer.toJson<DateTime?>(pubDate),
@@ -1093,6 +1166,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     Value<String?> showNotes = const Value.absent(),
     String? audioUrl,
     Value<String?> imageUrl = const Value.absent(),
+    Value<String?> link = const Value.absent(),
     Value<int?> durationMs = const Value.absent(),
     Value<int?> sizeBytes = const Value.absent(),
     Value<DateTime?> pubDate = const Value.absent(),
@@ -1108,6 +1182,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     showNotes: showNotes.present ? showNotes.value : this.showNotes,
     audioUrl: audioUrl ?? this.audioUrl,
     imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
+    link: link.present ? link.value : this.link,
     durationMs: durationMs.present ? durationMs.value : this.durationMs,
     sizeBytes: sizeBytes.present ? sizeBytes.value : this.sizeBytes,
     pubDate: pubDate.present ? pubDate.value : this.pubDate,
@@ -1125,6 +1200,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       showNotes: data.showNotes.present ? data.showNotes.value : this.showNotes,
       audioUrl: data.audioUrl.present ? data.audioUrl.value : this.audioUrl,
       imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
+      link: data.link.present ? data.link.value : this.link,
       durationMs: data.durationMs.present
           ? data.durationMs.value
           : this.durationMs,
@@ -1151,6 +1227,7 @@ class Episode extends DataClass implements Insertable<Episode> {
           ..write('showNotes: $showNotes, ')
           ..write('audioUrl: $audioUrl, ')
           ..write('imageUrl: $imageUrl, ')
+          ..write('link: $link, ')
           ..write('durationMs: $durationMs, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('pubDate: $pubDate, ')
@@ -1171,6 +1248,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     showNotes,
     audioUrl,
     imageUrl,
+    link,
     durationMs,
     sizeBytes,
     pubDate,
@@ -1190,6 +1268,7 @@ class Episode extends DataClass implements Insertable<Episode> {
           other.showNotes == this.showNotes &&
           other.audioUrl == this.audioUrl &&
           other.imageUrl == this.imageUrl &&
+          other.link == this.link &&
           other.durationMs == this.durationMs &&
           other.sizeBytes == this.sizeBytes &&
           other.pubDate == this.pubDate &&
@@ -1207,6 +1286,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
   final Value<String?> showNotes;
   final Value<String> audioUrl;
   final Value<String?> imageUrl;
+  final Value<String?> link;
   final Value<int?> durationMs;
   final Value<int?> sizeBytes;
   final Value<DateTime?> pubDate;
@@ -1222,6 +1302,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     this.showNotes = const Value.absent(),
     this.audioUrl = const Value.absent(),
     this.imageUrl = const Value.absent(),
+    this.link = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.sizeBytes = const Value.absent(),
     this.pubDate = const Value.absent(),
@@ -1238,6 +1319,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     this.showNotes = const Value.absent(),
     required String audioUrl,
     this.imageUrl = const Value.absent(),
+    this.link = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.sizeBytes = const Value.absent(),
     this.pubDate = const Value.absent(),
@@ -1257,6 +1339,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     Expression<String>? showNotes,
     Expression<String>? audioUrl,
     Expression<String>? imageUrl,
+    Expression<String>? link,
     Expression<int>? durationMs,
     Expression<int>? sizeBytes,
     Expression<DateTime>? pubDate,
@@ -1273,6 +1356,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
       if (showNotes != null) 'show_notes': showNotes,
       if (audioUrl != null) 'audio_url': audioUrl,
       if (imageUrl != null) 'image_url': imageUrl,
+      if (link != null) 'link': link,
       if (durationMs != null) 'duration_ms': durationMs,
       if (sizeBytes != null) 'size_bytes': sizeBytes,
       if (pubDate != null) 'pub_date': pubDate,
@@ -1291,6 +1375,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     Value<String?>? showNotes,
     Value<String>? audioUrl,
     Value<String?>? imageUrl,
+    Value<String?>? link,
     Value<int?>? durationMs,
     Value<int?>? sizeBytes,
     Value<DateTime?>? pubDate,
@@ -1307,6 +1392,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
       showNotes: showNotes ?? this.showNotes,
       audioUrl: audioUrl ?? this.audioUrl,
       imageUrl: imageUrl ?? this.imageUrl,
+      link: link ?? this.link,
       durationMs: durationMs ?? this.durationMs,
       sizeBytes: sizeBytes ?? this.sizeBytes,
       pubDate: pubDate ?? this.pubDate,
@@ -1340,6 +1426,9 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     }
     if (imageUrl.present) {
       map['image_url'] = Variable<String>(imageUrl.value);
+    }
+    if (link.present) {
+      map['link'] = Variable<String>(link.value);
     }
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
@@ -1377,6 +1466,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
           ..write('showNotes: $showNotes, ')
           ..write('audioUrl: $audioUrl, ')
           ..write('imageUrl: $imageUrl, ')
+          ..write('link: $link, ')
           ..write('durationMs: $durationMs, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('pubDate: $pubDate, ')
@@ -1963,6 +2053,7 @@ typedef $$PodcastsTableCreateCompanionBuilder =
       Value<String?> imageUrl,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> link,
       Value<DateTime?> lastFetched,
       Value<bool> subscribed,
     });
@@ -1974,6 +2065,7 @@ typedef $$PodcastsTableUpdateCompanionBuilder =
       Value<String?> imageUrl,
       Value<String?> author,
       Value<String?> description,
+      Value<String?> link,
       Value<DateTime?> lastFetched,
       Value<bool> subscribed,
     });
@@ -2038,6 +2130,11 @@ class $$PodcastsTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get link => $composableBuilder(
+    column: $table.link,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2116,6 +2213,11 @@ class $$PodcastsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get link => $composableBuilder(
+    column: $table.link,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get lastFetched => $composableBuilder(
     column: $table.lastFetched,
     builder: (column) => ColumnOrderings(column),
@@ -2155,6 +2257,9 @@ class $$PodcastsTableAnnotationComposer
     column: $table.description,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get link =>
+      $composableBuilder(column: $table.link, builder: (column) => column);
 
   GeneratedColumn<DateTime> get lastFetched => $composableBuilder(
     column: $table.lastFetched,
@@ -2226,6 +2331,7 @@ class $$PodcastsTableTableManager
                 Value<String?> imageUrl = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> link = const Value.absent(),
                 Value<DateTime?> lastFetched = const Value.absent(),
                 Value<bool> subscribed = const Value.absent(),
               }) => PodcastsCompanion(
@@ -2235,6 +2341,7 @@ class $$PodcastsTableTableManager
                 imageUrl: imageUrl,
                 author: author,
                 description: description,
+                link: link,
                 lastFetched: lastFetched,
                 subscribed: subscribed,
               ),
@@ -2246,6 +2353,7 @@ class $$PodcastsTableTableManager
                 Value<String?> imageUrl = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> link = const Value.absent(),
                 Value<DateTime?> lastFetched = const Value.absent(),
                 Value<bool> subscribed = const Value.absent(),
               }) => PodcastsCompanion.insert(
@@ -2255,6 +2363,7 @@ class $$PodcastsTableTableManager
                 imageUrl: imageUrl,
                 author: author,
                 description: description,
+                link: link,
                 lastFetched: lastFetched,
                 subscribed: subscribed,
               ),
@@ -2315,6 +2424,7 @@ typedef $$EpisodesTableCreateCompanionBuilder =
       Value<String?> showNotes,
       required String audioUrl,
       Value<String?> imageUrl,
+      Value<String?> link,
       Value<int?> durationMs,
       Value<int?> sizeBytes,
       Value<DateTime?> pubDate,
@@ -2332,6 +2442,7 @@ typedef $$EpisodesTableUpdateCompanionBuilder =
       Value<String?> showNotes,
       Value<String> audioUrl,
       Value<String?> imageUrl,
+      Value<String?> link,
       Value<int?> durationMs,
       Value<int?> sizeBytes,
       Value<DateTime?> pubDate,
@@ -2435,6 +2546,11 @@ class $$EpisodesTableFilterComposer
 
   ColumnFilters<String> get imageUrl => $composableBuilder(
     column: $table.imageUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get link => $composableBuilder(
+    column: $table.link,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2587,6 +2703,11 @@ class $$EpisodesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get link => $composableBuilder(
+    column: $table.link,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
     builder: (column) => ColumnOrderings(column),
@@ -2672,6 +2793,9 @@ class $$EpisodesTableAnnotationComposer
 
   GeneratedColumn<String> get imageUrl =>
       $composableBuilder(column: $table.imageUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get link =>
+      $composableBuilder(column: $table.link, builder: (column) => column);
 
   GeneratedColumn<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
@@ -2814,6 +2938,7 @@ class $$EpisodesTableTableManager
                 Value<String?> showNotes = const Value.absent(),
                 Value<String> audioUrl = const Value.absent(),
                 Value<String?> imageUrl = const Value.absent(),
+                Value<String?> link = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
                 Value<int?> sizeBytes = const Value.absent(),
                 Value<DateTime?> pubDate = const Value.absent(),
@@ -2829,6 +2954,7 @@ class $$EpisodesTableTableManager
                 showNotes: showNotes,
                 audioUrl: audioUrl,
                 imageUrl: imageUrl,
+                link: link,
                 durationMs: durationMs,
                 sizeBytes: sizeBytes,
                 pubDate: pubDate,
@@ -2846,6 +2972,7 @@ class $$EpisodesTableTableManager
                 Value<String?> showNotes = const Value.absent(),
                 required String audioUrl,
                 Value<String?> imageUrl = const Value.absent(),
+                Value<String?> link = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
                 Value<int?> sizeBytes = const Value.absent(),
                 Value<DateTime?> pubDate = const Value.absent(),
@@ -2861,6 +2988,7 @@ class $$EpisodesTableTableManager
                 showNotes: showNotes,
                 audioUrl: audioUrl,
                 imageUrl: imageUrl,
+                link: link,
                 durationMs: durationMs,
                 sizeBytes: sizeBytes,
                 pubDate: pubDate,

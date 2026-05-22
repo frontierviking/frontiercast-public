@@ -16,6 +16,7 @@ class Podcasts extends Table {
   TextColumn get imageUrl => text().nullable()();
   TextColumn get author => text().nullable()();
   TextColumn get description => text().nullable()();
+  TextColumn get link => text().nullable()();
   DateTimeColumn get lastFetched => dateTime().nullable()();
   BoolColumn get subscribed => boolean().withDefault(const Constant(true))();
 }
@@ -31,6 +32,7 @@ class Episodes extends Table {
   TextColumn get showNotes => text().nullable()();
   TextColumn get audioUrl => text()();
   TextColumn get imageUrl => text().nullable()();
+  TextColumn get link => text().nullable()();
   IntColumn get durationMs => integer().nullable()();
   IntColumn get sizeBytes => integer().nullable()();
   DateTimeColumn get pubDate => dateTime().nullable()();
@@ -212,6 +214,7 @@ class EpisodeDao extends DatabaseAccessor<AppDatabase> with _$EpisodeDaoMixin {
               showNotes: r.showNotes,
               audioUrl: r.audioUrl,
               imageUrl: r.imageUrl,
+              link: r.link,
               durationMs: r.durationMs,
               sizeBytes: r.sizeBytes,
               pubDate: r.pubDate,
@@ -373,7 +376,7 @@ class AppDatabase extends _$AppDatabase {
       _watchEpisodesInState(DownloadState.downloading);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -405,6 +408,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.addColumn(podcasts, podcasts.subscribed);
         await m.addColumn(episodes, episodes.imageUrl);
+      }
+      if (from < 7) {
+        await m.addColumn(podcasts, podcasts.link);
+        await m.addColumn(episodes, episodes.link);
       }
     },
     beforeOpen: (details) async {

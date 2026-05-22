@@ -8,6 +8,7 @@ import '../../services/playback_controller.dart';
 import '../../util/format.dart';
 import '../downloads/download_button.dart';
 import '../queue/queue_screen.dart';
+import 'skip_seconds_dialog.dart';
 
 const _speeds = [0.8, 1.0, 1.2, 1.5, 1.75, 2.0];
 
@@ -207,11 +208,12 @@ class _Controls extends ConsumerWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        IconButton(
-          iconSize: 40,
-          tooltip: 'Back $backSecs s',
-          icon: Icon(_rewindIcon(backSecs)),
-          onPressed: controller.skipBackward,
+        _SkipButton(
+          icon: _rewindIcon(backSecs),
+          seconds: backSecs,
+          onSkip: controller.skipBackward,
+          onChoose: () =>
+              _chooseSkip(context, ref, forward: false, current: backSecs),
         ),
         SizedBox(
           width: 72,
@@ -228,14 +230,68 @@ class _Controls extends ConsumerWidget {
                   onPressed: controller.togglePlayPause,
                 ),
         ),
-        IconButton(
-          iconSize: 40,
-          tooltip: 'Forward $fwdSecs s',
-          icon: Icon(_forwardIcon(fwdSecs)),
-          onPressed: controller.skipForward,
+        _SkipButton(
+          icon: _forwardIcon(fwdSecs),
+          seconds: fwdSecs,
+          onSkip: controller.skipForward,
+          onChoose: () =>
+              _chooseSkip(context, ref, forward: true, current: fwdSecs),
         ),
       ],
     );
+  }
+}
+
+class _SkipButton extends StatelessWidget {
+  final IconData icon;
+  final int seconds;
+  final VoidCallback onSkip;
+  final VoidCallback onChoose;
+  const _SkipButton({
+    required this.icon,
+    required this.seconds,
+    required this.onSkip,
+    required this.onChoose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkResponse(
+      onTap: onSkip,
+      onLongPress: onChoose,
+      radius: 38,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 38),
+            const SizedBox(height: 2),
+            Text('${seconds}s', style: Theme.of(context).textTheme.labelSmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _chooseSkip(
+  BuildContext context,
+  WidgetRef ref, {
+  required bool forward,
+  required int current,
+}) async {
+  final picked = await showSkipSecondsDialog(
+    context,
+    title: forward ? 'Skip forward' : 'Skip backward',
+    current: current,
+  );
+  if (picked == null) return;
+  final controller = ref.read(playbackSettingsProvider.notifier);
+  if (forward) {
+    await controller.setForward(picked);
+  } else {
+    await controller.setBackward(picked);
   }
 }
 

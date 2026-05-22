@@ -7,6 +7,7 @@ class ParsedEpisode {
   final String? showNotes;
   final String audioUrl;
   final String? imageUrl;
+  final String? link;
   final int? durationMs;
   final int? sizeBytes;
   final DateTime? pubDate;
@@ -17,6 +18,7 @@ class ParsedEpisode {
     this.showNotes,
     required this.audioUrl,
     this.imageUrl,
+    this.link,
     this.durationMs,
     this.sizeBytes,
     this.pubDate,
@@ -28,6 +30,7 @@ class ParsedFeed {
   final String? imageUrl;
   final String? author;
   final String? description;
+  final String? link;
   final List<ParsedEpisode> episodes;
 
   ParsedFeed({
@@ -35,6 +38,7 @@ class ParsedFeed {
     this.imageUrl,
     this.author,
     this.description,
+    this.link,
     required this.episodes,
   });
 }
@@ -90,6 +94,7 @@ class FeedParser {
               item.content?.value ?? item.description ?? item.itunes?.summary,
           audioUrl: audioUrl,
           imageUrl: _episodeImage(item),
+          link: item.link,
           durationMs: item.itunes?.duration?.inMilliseconds,
           sizeBytes: (length != null && length > 0) ? length : null,
           pubDate: _parseDate(item.pubDate),
@@ -104,6 +109,7 @@ class FeedParser {
       imageUrl: feed.itunes?.image?.href ?? feed.image?.url,
       author: feed.itunes?.author ?? feed.author,
       description: feed.description ?? feed.itunes?.summary,
+      link: feed.link,
       episodes: episodes,
     );
   }

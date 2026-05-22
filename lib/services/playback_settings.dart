@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _kForward = 'skip_forward_seconds';
 const _kBackward = 'skip_backward_seconds';
 
-const skipSecondOptions = [10, 15, 30, 45, 60];
+const skipSecondOptions = [5, 10, 15, 30, 45, 60];
 
 class PlaybackSettings {
   final int forwardSeconds;

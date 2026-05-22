@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/db/database.dart';
 import '../../providers.dart';
@@ -27,6 +28,22 @@ class PodcastDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(podcast?.title ?? 'Podcast'),
         actions: [
+          if (podcast != null)
+            IconButton(
+              tooltip: 'Share',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () {
+                final link = (podcast.link != null && podcast.link!.isNotEmpty)
+                    ? podcast.link!
+                    : podcast.feedUrl;
+                SharePlus.instance.share(
+                  ShareParams(
+                    text: '${podcast.title}\n$link',
+                    subject: podcast.title,
+                  ),
+                );
+              },
+            ),
           PopupMenuButton<String>(
             onSelected: (value) {
               final dao = ref.read(databaseProvider).episodeDao;

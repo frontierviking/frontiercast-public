@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/podcast_repository.dart';
 import '../../providers.dart';
-import '../../services/playback_settings.dart';
+import '../player/skip_seconds_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -163,21 +163,10 @@ class SettingsScreen extends ConsumerWidget {
     required int current,
     required Future<void> Function(int) onPick,
   }) async {
-    final picked = await showDialog<int>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(title),
-        children: [
-          for (final s in skipSecondOptions)
-            ListTile(
-              title: Text('$s seconds'),
-              trailing: s == current
-                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
-                  : null,
-              onTap: () => Navigator.of(ctx).pop(s),
-            ),
-        ],
-      ),
+    final picked = await showSkipSecondsDialog(
+      context,
+      title: title,
+      current: current,
     );
     if (picked != null) await onPick(picked);
   }
