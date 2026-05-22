@@ -49,6 +49,7 @@ dependencies:
   audio_service: ^0.18.18
   background_downloader: ^9.5.4
   share_plus: ^12.0.2
+  reorderable_grid_view: ^2.2.8
 dev_dependencies:
   flutter_test:
     sdk: flutter

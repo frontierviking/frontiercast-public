@@ -50,6 +50,8 @@ class PodcastRepository {
     if (isNew) {
       // Only the latest few episodes count as "new" on a fresh subscribe.
       await db.episodeDao.markOlderAsPlayed(podcastId);
+      // Place new subscriptions at the end of the manual order.
+      await db.podcastDao.setSortIndex(podcastId, podcastId);
     }
     return podcastId;
   }

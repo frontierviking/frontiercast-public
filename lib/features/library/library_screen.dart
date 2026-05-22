@@ -1,9 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:reorderable_grid_view/reorderable_grid_view.dart';
 
 import '../../data/db/database.dart';
 import '../../providers.dart';
+import '../../services/library_settings.dart';
 import '../../theme.dart';
 import '../podcast_detail/podcast_detail_screen.dart';
 
@@ -27,8 +29,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryWithCountsProvider);
+    final sort = ref.watch(librarySortProvider).value ?? LibrarySort.manual;
     return Scaffold(
-      appBar: AppBar(title: const Text('Library')),
+      appBar: AppBar(
+        title: const Text('Library'),
+        actions: [
+          PopupMenuButton<LibrarySort>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort',
+            initialValue: sort,
+            onSelected: (s) =>
+                ref.read(librarySortProvider.notifier).set(s),
+            itemBuilder: (context) => [
+              for (final s in LibrarySort.values)
+                CheckedPopupMenuItem(
+                  value: s,
+                  checked: s == sort,
+                  child: Text(s.label),
+                ),
+            ],
+          ),
+        ],
+      ),
       body: library.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -36,10 +58,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           if (all.isEmpty) return const _EmptyLibrary();
           final q = _query.trim().toLowerCase();
           final podcasts = q.isEmpty
-              ? all
+              ? List.of(all)
               : all
                     .where((p) => p.podcast.title.toLowerCase().contains(q))
                     .toList();
+          _applySort(podcasts, sort);
+          // Manual drag-reorder only makes sense on the full, unsorted list.
+          final reorderable = sort == LibrarySort.manual && q.isEmpty;
           return Column(
             children: [
               Padding(
@@ -69,21 +94,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           child: Text('No matches'),
                         ),
                       )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
-                              childAspectRatio: 0.68,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 14,
-                            ),
-                        itemCount: podcasts.length,
-                        itemBuilder: (context, i) => _PodcastTile(
-                          podcast: podcasts[i].podcast,
-                          unplayed: podcasts[i].unplayed,
-                        ),
-                      ),
+                    : reorderable
+                        ? _buildReorderable(podcasts)
+                        : _buildGrid(podcasts),
               ),
             ],
           );
@@ -91,12 +104,94 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
     );
   }
+
+  static const _gridDelegate =
+      SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.68,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 14,
+      );
+
+  Widget _buildGrid(
+    List<({Podcast podcast, int unplayed, DateTime? lastEpisode})> podcasts,
+  ) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: _gridDelegate,
+      itemCount: podcasts.length,
+      itemBuilder: (context, i) => _PodcastTile(
+        key: ValueKey(podcasts[i].podcast.id),
+        podcast: podcasts[i].podcast,
+        unplayed: podcasts[i].unplayed,
+      ),
+    );
+  }
+
+  Widget _buildReorderable(
+    List<({Podcast podcast, int unplayed, DateTime? lastEpisode})> podcasts,
+  ) {
+    return ReorderableGridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: _gridDelegate,
+      itemCount: podcasts.length,
+      onReorder: (oldIndex, newIndex) {
+        final ids = podcasts.map((p) => p.podcast.id).toList();
+        final moved = ids.removeAt(oldIndex);
+        ids.insert(newIndex, moved);
+        ref.read(databaseProvider).podcastDao.setSortOrder(ids);
+      },
+      itemBuilder: (context, i) => _PodcastTile(
+        key: ValueKey(podcasts[i].podcast.id),
+        podcast: podcasts[i].podcast,
+        unplayed: podcasts[i].unplayed,
+      ),
+    );
+  }
+
+  void _applySort(
+    List<({Podcast podcast, int unplayed, DateTime? lastEpisode})> list,
+    LibrarySort sort,
+  ) {
+    switch (sort) {
+      case LibrarySort.manual:
+        list.sort((a, b) {
+          final c = a.podcast.sortIndex.compareTo(b.podcast.sortIndex);
+          return c != 0 ? c : a.podcast.id.compareTo(b.podcast.id);
+        });
+      case LibrarySort.alphabetical:
+        list.sort(
+          (a, b) => a.podcast.title.toLowerCase().compareTo(
+            b.podcast.title.toLowerCase(),
+          ),
+        );
+      case LibrarySort.dateAdded:
+        list.sort((a, b) => b.podcast.id.compareTo(a.podcast.id));
+      case LibrarySort.recentlyUpdated:
+        list.sort((a, b) {
+          final ad = a.lastEpisode, bd = b.lastEpisode;
+          if (ad == null && bd == null) return 0;
+          if (ad == null) return 1; // nulls last
+          if (bd == null) return -1;
+          return bd.compareTo(ad);
+        });
+      case LibrarySort.unplayedFirst:
+        list.sort((a, b) {
+          final c = b.unplayed.compareTo(a.unplayed);
+          return c != 0
+              ? c
+              : a.podcast.title.toLowerCase().compareTo(
+                  b.podcast.title.toLowerCase(),
+                );
+        });
+    }
+  }
 }
 
 class _PodcastTile extends StatelessWidget {
   final Podcast podcast;
   final int unplayed;
-  const _PodcastTile({required this.podcast, this.unplayed = 0});
+  const _PodcastTile({super.key, required this.podcast, this.unplayed = 0});
 
   @override
   Widget build(BuildContext context) {

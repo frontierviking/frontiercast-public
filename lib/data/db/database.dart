@@ -19,6 +19,7 @@ class Podcasts extends Table {
   TextColumn get link => text().nullable()();
   DateTimeColumn get lastFetched => dateTime().nullable()();
   BoolColumn get subscribed => boolean().withDefault(const Constant(true))();
+  IntColumn get sortIndex => integer().withDefault(const Constant(0))();
 }
 
 @TableIndex(name: 'idx_episodes_podcast', columns: {#podcastId})
@@ -86,6 +87,22 @@ class PodcastDao extends DatabaseAccessor<AppDatabase> with _$PodcastDaoMixin {
       (update(podcasts)..where((t) => t.id.equals(id))).write(
         PodcastsCompanion(subscribed: Value(subscribed)),
       );
+
+  Future<void> setSortIndex(int id, int index) =>
+      (update(podcasts)..where((t) => t.id.equals(id)))
+          .write(PodcastsCompanion(sortIndex: Value(index)));
+
+  Future<void> setSortOrder(List<int> idsInOrder) async {
+    await batch((b) {
+      for (var i = 0; i < idsInOrder.length; i++) {
+        b.update(
+          podcasts,
+          PodcastsCompanion(sortIndex: Value(i)),
+          where: (t) => t.id.equals(idsInOrder[i]),
+        );
+      }
+    });
+  }
 
   Future<Podcast?> getByFeedUrl(String feedUrl) => (select(
     podcasts,
@@ -306,21 +323,27 @@ class AppDatabase extends _$AppDatabase {
   late final TranscriptDao transcriptDao = TranscriptDao(this);
   late final QueueDao queueDao = QueueDao(this);
 
-  /// Subscribed podcasts with their count of unplayed episodes, by title.
-  Stream<List<({Podcast podcast, int unplayed})>> watchLibraryWithCounts() {
+  /// Subscribed podcasts with their unplayed count and latest-episode date.
+  Stream<List<({Podcast podcast, int unplayed, DateTime? lastEpisode})>>
+  watchLibraryWithCounts() {
     final unplayed = episodes.id.count(filter: episodes.isPlayed.equals(false));
+    final lastEpisode = episodes.pubDate.max();
     final query =
         select(podcasts).join([
             leftOuterJoin(episodes, episodes.podcastId.equalsExp(podcasts.id)),
           ])
           ..where(podcasts.subscribed.equals(true))
-          ..addColumns([unplayed])
+          ..addColumns([unplayed, lastEpisode])
           ..groupBy([podcasts.id])
           ..orderBy([OrderingTerm(expression: podcasts.title)]);
     return query.watch().map(
       (rows) => [
         for (final row in rows)
-          (podcast: row.readTable(podcasts), unplayed: row.read(unplayed) ?? 0),
+          (
+            podcast: row.readTable(podcasts),
+            unplayed: row.read(unplayed) ?? 0,
+            lastEpisode: row.read(lastEpisode),
+          ),
       ],
     );
   }
@@ -380,7 +403,7 @@ class AppDatabase extends _$AppDatabase {
       _watchEpisodesInState(DownloadState.downloading);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -416,6 +439,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 7) {
         await m.addColumn(podcasts, podcasts.link);
         await m.addColumn(episodes, episodes.link);
+      }
+      if (from < 8) {
+        await m.addColumn(podcasts, podcasts.sortIndex);
+        // Seed manual order with insertion order (≈ time added).
+        await customStatement('UPDATE podcasts SET sort_index = id');
       }
     },
     beforeOpen: (details) async {

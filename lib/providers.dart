@@ -9,6 +9,7 @@ import 'data/transcribe/transcribe_client.dart';
 import 'data/transcribe/transcribe_settings.dart';
 import 'services/audio_handler.dart';
 import 'services/download_controller.dart';
+import 'services/library_settings.dart';
 import 'services/playback_controller.dart';
 import 'services/playback_settings.dart';
 
@@ -34,10 +35,15 @@ final libraryProvider = StreamProvider<List<Podcast>>(
   (ref) => ref.watch(databaseProvider).podcastDao.watchAll(),
 );
 
-/// Subscribed podcasts with their unplayed-episode counts (for badges).
+/// Subscribed podcasts with unplayed counts + latest-episode date.
 final libraryWithCountsProvider =
-    StreamProvider<List<({Podcast podcast, int unplayed})>>(
-      (ref) => ref.watch(databaseProvider).watchLibraryWithCounts(),
+    StreamProvider<
+      List<({Podcast podcast, int unplayed, DateTime? lastEpisode})>
+    >((ref) => ref.watch(databaseProvider).watchLibraryWithCounts());
+
+final librarySortProvider =
+    AsyncNotifierProvider<LibrarySortController, LibrarySort>(
+      LibrarySortController.new,
     );
 
 /// A single podcast by id (for the detail header).

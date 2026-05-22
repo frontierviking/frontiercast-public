@@ -171,6 +171,18 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _sortIndexMeta = const VerificationMeta(
+    'sortIndex',
+  );
+  @override
+  late final GeneratedColumn<int> sortIndex = GeneratedColumn<int>(
+    'sort_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -182,6 +194,7 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
     link,
     lastFetched,
     subscribed,
+    sortIndex,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -256,6 +269,12 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
         subscribed.isAcceptableOrUnknown(data['subscribed']!, _subscribedMeta),
       );
     }
+    if (data.containsKey('sort_index')) {
+      context.handle(
+        _sortIndexMeta,
+        sortIndex.isAcceptableOrUnknown(data['sort_index']!, _sortIndexMeta),
+      );
+    }
     return context;
   }
 
@@ -301,6 +320,10 @@ class $PodcastsTable extends Podcasts with TableInfo<$PodcastsTable, Podcast> {
         DriftSqlType.bool,
         data['${effectivePrefix}subscribed'],
       )!,
+      sortIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_index'],
+      )!,
     );
   }
 
@@ -320,6 +343,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
   final String? link;
   final DateTime? lastFetched;
   final bool subscribed;
+  final int sortIndex;
   const Podcast({
     required this.id,
     required this.title,
@@ -330,6 +354,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     this.link,
     this.lastFetched,
     required this.subscribed,
+    required this.sortIndex,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -353,6 +378,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       map['last_fetched'] = Variable<DateTime>(lastFetched);
     }
     map['subscribed'] = Variable<bool>(subscribed);
+    map['sort_index'] = Variable<int>(sortIndex);
     return map;
   }
 
@@ -375,6 +401,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
           ? const Value.absent()
           : Value(lastFetched),
       subscribed: Value(subscribed),
+      sortIndex: Value(sortIndex),
     );
   }
 
@@ -393,6 +420,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       link: serializer.fromJson<String?>(json['link']),
       lastFetched: serializer.fromJson<DateTime?>(json['lastFetched']),
       subscribed: serializer.fromJson<bool>(json['subscribed']),
+      sortIndex: serializer.fromJson<int>(json['sortIndex']),
     );
   }
   @override
@@ -408,6 +436,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       'link': serializer.toJson<String?>(link),
       'lastFetched': serializer.toJson<DateTime?>(lastFetched),
       'subscribed': serializer.toJson<bool>(subscribed),
+      'sortIndex': serializer.toJson<int>(sortIndex),
     };
   }
 
@@ -421,6 +450,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     Value<String?> link = const Value.absent(),
     Value<DateTime?> lastFetched = const Value.absent(),
     bool? subscribed,
+    int? sortIndex,
   }) => Podcast(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -431,6 +461,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     link: link.present ? link.value : this.link,
     lastFetched: lastFetched.present ? lastFetched.value : this.lastFetched,
     subscribed: subscribed ?? this.subscribed,
+    sortIndex: sortIndex ?? this.sortIndex,
   );
   Podcast copyWithCompanion(PodcastsCompanion data) {
     return Podcast(
@@ -449,6 +480,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
       subscribed: data.subscribed.present
           ? data.subscribed.value
           : this.subscribed,
+      sortIndex: data.sortIndex.present ? data.sortIndex.value : this.sortIndex,
     );
   }
 
@@ -463,7 +495,8 @@ class Podcast extends DataClass implements Insertable<Podcast> {
           ..write('description: $description, ')
           ..write('link: $link, ')
           ..write('lastFetched: $lastFetched, ')
-          ..write('subscribed: $subscribed')
+          ..write('subscribed: $subscribed, ')
+          ..write('sortIndex: $sortIndex')
           ..write(')'))
         .toString();
   }
@@ -479,6 +512,7 @@ class Podcast extends DataClass implements Insertable<Podcast> {
     link,
     lastFetched,
     subscribed,
+    sortIndex,
   );
   @override
   bool operator ==(Object other) =>
@@ -492,7 +526,8 @@ class Podcast extends DataClass implements Insertable<Podcast> {
           other.description == this.description &&
           other.link == this.link &&
           other.lastFetched == this.lastFetched &&
-          other.subscribed == this.subscribed);
+          other.subscribed == this.subscribed &&
+          other.sortIndex == this.sortIndex);
 }
 
 class PodcastsCompanion extends UpdateCompanion<Podcast> {
@@ -505,6 +540,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
   final Value<String?> link;
   final Value<DateTime?> lastFetched;
   final Value<bool> subscribed;
+  final Value<int> sortIndex;
   const PodcastsCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -515,6 +551,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     this.link = const Value.absent(),
     this.lastFetched = const Value.absent(),
     this.subscribed = const Value.absent(),
+    this.sortIndex = const Value.absent(),
   });
   PodcastsCompanion.insert({
     this.id = const Value.absent(),
@@ -526,6 +563,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     this.link = const Value.absent(),
     this.lastFetched = const Value.absent(),
     this.subscribed = const Value.absent(),
+    this.sortIndex = const Value.absent(),
   }) : title = Value(title),
        feedUrl = Value(feedUrl);
   static Insertable<Podcast> custom({
@@ -538,6 +576,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     Expression<String>? link,
     Expression<DateTime>? lastFetched,
     Expression<bool>? subscribed,
+    Expression<int>? sortIndex,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -549,6 +588,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
       if (link != null) 'link': link,
       if (lastFetched != null) 'last_fetched': lastFetched,
       if (subscribed != null) 'subscribed': subscribed,
+      if (sortIndex != null) 'sort_index': sortIndex,
     });
   }
 
@@ -562,6 +602,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     Value<String?>? link,
     Value<DateTime?>? lastFetched,
     Value<bool>? subscribed,
+    Value<int>? sortIndex,
   }) {
     return PodcastsCompanion(
       id: id ?? this.id,
@@ -573,6 +614,7 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
       link: link ?? this.link,
       lastFetched: lastFetched ?? this.lastFetched,
       subscribed: subscribed ?? this.subscribed,
+      sortIndex: sortIndex ?? this.sortIndex,
     );
   }
 
@@ -606,6 +648,9 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
     if (subscribed.present) {
       map['subscribed'] = Variable<bool>(subscribed.value);
     }
+    if (sortIndex.present) {
+      map['sort_index'] = Variable<int>(sortIndex.value);
+    }
     return map;
   }
 
@@ -620,7 +665,8 @@ class PodcastsCompanion extends UpdateCompanion<Podcast> {
           ..write('description: $description, ')
           ..write('link: $link, ')
           ..write('lastFetched: $lastFetched, ')
-          ..write('subscribed: $subscribed')
+          ..write('subscribed: $subscribed, ')
+          ..write('sortIndex: $sortIndex')
           ..write(')'))
         .toString();
   }
@@ -2056,6 +2102,7 @@ typedef $$PodcastsTableCreateCompanionBuilder =
       Value<String?> link,
       Value<DateTime?> lastFetched,
       Value<bool> subscribed,
+      Value<int> sortIndex,
     });
 typedef $$PodcastsTableUpdateCompanionBuilder =
     PodcastsCompanion Function({
@@ -2068,6 +2115,7 @@ typedef $$PodcastsTableUpdateCompanionBuilder =
       Value<String?> link,
       Value<DateTime?> lastFetched,
       Value<bool> subscribed,
+      Value<int> sortIndex,
     });
 
 final class $$PodcastsTableReferences
@@ -2145,6 +2193,11 @@ class $$PodcastsTableFilterComposer
 
   ColumnFilters<bool> get subscribed => $composableBuilder(
     column: $table.subscribed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortIndex => $composableBuilder(
+    column: $table.sortIndex,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2227,6 +2280,11 @@ class $$PodcastsTableOrderingComposer
     column: $table.subscribed,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get sortIndex => $composableBuilder(
+    column: $table.sortIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PodcastsTableAnnotationComposer
@@ -2270,6 +2328,9 @@ class $$PodcastsTableAnnotationComposer
     column: $table.subscribed,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get sortIndex =>
+      $composableBuilder(column: $table.sortIndex, builder: (column) => column);
 
   Expression<T> episodesRefs<T extends Object>(
     Expression<T> Function($$EpisodesTableAnnotationComposer a) f,
@@ -2334,6 +2395,7 @@ class $$PodcastsTableTableManager
                 Value<String?> link = const Value.absent(),
                 Value<DateTime?> lastFetched = const Value.absent(),
                 Value<bool> subscribed = const Value.absent(),
+                Value<int> sortIndex = const Value.absent(),
               }) => PodcastsCompanion(
                 id: id,
                 title: title,
@@ -2344,6 +2406,7 @@ class $$PodcastsTableTableManager
                 link: link,
                 lastFetched: lastFetched,
                 subscribed: subscribed,
+                sortIndex: sortIndex,
               ),
           createCompanionCallback:
               ({
@@ -2356,6 +2419,7 @@ class $$PodcastsTableTableManager
                 Value<String?> link = const Value.absent(),
                 Value<DateTime?> lastFetched = const Value.absent(),
                 Value<bool> subscribed = const Value.absent(),
+                Value<int> sortIndex = const Value.absent(),
               }) => PodcastsCompanion.insert(
                 id: id,
                 title: title,
@@ -2366,6 +2430,7 @@ class $$PodcastsTableTableManager
                 link: link,
                 lastFetched: lastFetched,
                 subscribed: subscribed,
+                sortIndex: sortIndex,
               ),
           withReferenceMapper: (p0) => p0
               .map(
