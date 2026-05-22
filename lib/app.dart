@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/downloads/downloads_screen.dart';
 import 'features/library/library_screen.dart';
 import 'features/player/mini_player.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'providers.dart';
 import 'theme.dart';
 
 class FrontierCastApp extends StatelessWidget {
@@ -53,15 +55,18 @@ class FrontierCastApp extends StatelessWidget {
   }
 }
 
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell>
+    with WidgetsBindingObserver {
   int _index = 0;
+  DateTime? _lastRefresh;
+  static const _minRefreshInterval = Duration(minutes: 15);
 
   static const _screens = [
     LibraryScreen(),
@@ -69,6 +74,40 @@ class _HomeShellState extends State<HomeShell> {
     DownloadsScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _quietRefresh());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _quietRefresh();
+  }
+
+  /// Refreshes all subscribed feeds quietly in the background (no spinner),
+  /// throttled so foreground switches don't hammer the network.
+  Future<void> _quietRefresh() async {
+    final now = DateTime.now();
+    if (_lastRefresh != null &&
+        now.difference(_lastRefresh!) < _minRefreshInterval) {
+      return;
+    }
+    _lastRefresh = now;
+    try {
+      await ref.read(podcastRepositoryProvider).refreshAll();
+    } catch (_) {
+      // best-effort; ignore failures
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
