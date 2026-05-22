@@ -24,20 +24,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     super.dispose();
   }
 
-  Future<void> _refreshAll() async {
-    final result = await ref.read(podcastRepositoryProvider).refreshAll();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Refreshed ${result.succeeded} podcast(s)'
-            '${result.failed > 0 ? ', ${result.failed} failed' : ''}',
-          ),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryWithCountsProvider);
@@ -76,33 +62,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 ),
               ),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: _refreshAll,
-                  child: podcasts.isEmpty
-                      ? ListView(
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.all(48),
-                              child: Center(child: Text('No matches')),
-                            ),
-                          ],
-                        )
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(12),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 4,
-                                childAspectRatio: 0.68,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 14,
-                              ),
-                          itemCount: podcasts.length,
-                          itemBuilder: (context, i) => _PodcastTile(
-                            podcast: podcasts[i].podcast,
-                            unplayed: podcasts[i].unplayed,
-                          ),
+                child: podcasts.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(48),
+                          child: Text('No matches'),
                         ),
-                ),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(12),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              childAspectRatio: 0.68,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 14,
+                            ),
+                        itemCount: podcasts.length,
+                        itemBuilder: (context, i) => _PodcastTile(
+                          podcast: podcasts[i].podcast,
+                          unplayed: podcasts[i].unplayed,
+                        ),
+                      ),
               ),
             ],
           );
