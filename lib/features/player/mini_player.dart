@@ -1,0 +1,119 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:just_audio/just_audio.dart';
+
+import '../../providers.dart';
+import 'now_playing_screen.dart';
+
+/// Persistent bottom bar: the single play/pause control whenever an episode is
+/// loaded. Tapping it opens the full-screen player.
+class MiniPlayer extends ConsumerWidget {
+  const MiniPlayer({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playback = ref.watch(playbackControllerProvider);
+    final episode = playback.episode;
+    if (episode == null) return const SizedBox.shrink();
+
+    final podcast = playback.podcast;
+    final scheme = Theme.of(context).colorScheme;
+    final controller = ref.read(playbackControllerProvider.notifier);
+
+    final playerState = ref.watch(playerStateProvider).value;
+    final playing = playerState?.playing ?? false;
+    final processing = playerState?.processingState;
+    final buffering =
+        processing == ProcessingState.loading ||
+        processing == ProcessingState.buffering;
+
+    final posData = ref.watch(positionDataProvider).value;
+    final progress = (posData != null && posData.duration.inMilliseconds > 0)
+        ? posData.position.inMilliseconds / posData.duration.inMilliseconds
+        : 0.0;
+
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      child: InkWell(
+        onTap: () => Navigator.of(
+          context,
+          rootNavigator: true,
+        ).push(MaterialPageRoute(builder: (_) => const NowPlayingScreen())),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 2,
+              backgroundColor: Colors.transparent,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child:
+                          (podcast?.imageUrl != null &&
+                              podcast!.imageUrl!.isNotEmpty)
+                          ? CachedNetworkImage(
+                              imageUrl: podcast.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, _, _) =>
+                                  const Icon(Icons.podcasts),
+                            )
+                          : const Icon(Icons.podcasts),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          episode.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        if (podcast != null)
+                          Text(
+                            podcast.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: buffering
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : IconButton(
+                            iconSize: 32,
+                            icon: Icon(
+                              playing ? Icons.pause : Icons.play_arrow,
+                            ),
+                            onPressed: controller.togglePlayPause,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

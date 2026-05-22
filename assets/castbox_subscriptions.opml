@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+    <head>
+        <title>Sample subscriptions</title>
+    </head>
+    <body>
+        <outline text="Acquired" title="Acquired" type="rss" htmlUrl="https://feeds.transistor.fm/acquired" xmlUrl="https://feeds.transistor.fm/acquired" />
+        <outline text="Darknet Diaries" title="Darknet Diaries" type="rss" htmlUrl="https://feeds.megaphone.fm/darknetdiaries" xmlUrl="https://feeds.megaphone.fm/darknetdiaries" />
+    </body>
+</opml>
