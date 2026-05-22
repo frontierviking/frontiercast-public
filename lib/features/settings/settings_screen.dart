@@ -43,6 +43,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Refresh all feeds'),
             onTap: () => _refreshAll(context, ref),
           ),
+          ListTile(
+            leading: const Icon(Icons.done_all),
+            title: const Text('Mark all episodes as played'),
+            subtitle: const Text('Across every podcast'),
+            onTap: () => _markAllPlayed(context, ref),
+          ),
           const Divider(),
           const _SectionHeader('Playback'),
           ListTile(
@@ -155,6 +161,36 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (value != null && value.isNotEmpty) await onSave(value);
+  }
+
+  Future<void> _markAllPlayed(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mark all as played?'),
+        content: const Text(
+          'This marks every episode of every podcast as played, clearing all '
+          'unplayed badges.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Mark all'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(databaseProvider).episodeDao.setAllPlayedGlobal(true);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All episodes marked as played')),
+      );
+    }
   }
 
   Future<void> _chooseSeconds(

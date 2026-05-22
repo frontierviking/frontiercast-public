@@ -149,6 +149,10 @@ class EpisodeDao extends DatabaseAccessor<AppDatabase> with _$EpisodeDaoMixin {
         EpisodesCompanion(isPlayed: Value(played)),
       );
 
+  /// Mark every episode of every podcast played/unplayed.
+  Future<void> setAllPlayedGlobal(bool played) =>
+      update(episodes).write(EpisodesCompanion(isPlayed: Value(played)));
+
   /// On a fresh subscribe, treat all but the most recent [keepRecent] episodes
   /// as already-played (so only the latest few show as "new"), without touching
   /// episodes the user has started or finished.
