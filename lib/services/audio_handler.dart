@@ -26,16 +26,28 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
     required MediaItem item,
     required Uri uri,
     required Duration initialPosition,
+  }) => setSource(item: item, uri: uri, initialPosition: initialPosition, play: true);
+
+  /// Sets (or swaps) the audio source at [initialPosition], optionally starting
+  /// playback. Used both for first load and for switching a streaming episode
+  /// over to its local file once the download finishes.
+  Future<void> setSource({
+    required MediaItem item,
+    required Uri uri,
+    required Duration initialPosition,
+    required bool play,
   }) async {
     mediaItem.add(item);
     await player.setAudioSource(
       AudioSource.uri(uri, tag: item),
       initialPosition: initialPosition,
     );
-    await player.play();
+    if (play) await player.play();
   }
 
   void _broadcastState() {
+    // onError keeps this subscription alive across transient playback errors
+    // (e.g. a dropped network stream) so lock-screen state keeps updating.
     player.playbackEventStream.listen((event) {
       final playing = player.playing;
       playbackState.add(
@@ -58,7 +70,7 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
           speed: player.speed,
         ),
       );
-    });
+    }, onError: (Object _, StackTrace _) {});
   }
 
   static const _processingState = {

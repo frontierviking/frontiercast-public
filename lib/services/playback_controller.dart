@@ -64,12 +64,20 @@ class PlaybackController extends Notifier<PlaybackState> {
 
   int _lastSavedSec = -1000;
   bool _marked = false;
+  bool _recovering = false;
   Timer? _sleepTimer;
+  StreamSubscription<Episode?>? _episodeSub;
 
   @override
   PlaybackState build() {
     final posSub = _player.positionStream.listen(_onPosition);
     final stateSub = _player.playerStateStream.listen(_onPlayerState);
+    // Surface playback errors (e.g. a dropped network stream) so we can recover
+    // instead of leaving the player wedged and unable to resume.
+    final errSub = _player.playbackEventStream.listen(
+      (_) {},
+      onError: (Object e, StackTrace _) => _onPlayerError(e),
+    );
     _applySkipSettings(ref.read(playbackSettingsProvider).value);
     ref.listen(
       playbackSettingsProvider,
@@ -78,6 +86,8 @@ class PlaybackController extends Notifier<PlaybackState> {
     ref.onDispose(() {
       posSub.cancel();
       stateSub.cancel();
+      errSub.cancel();
+      _episodeSub?.cancel();
       _sleepTimer?.cancel();
     });
     return const PlaybackState();
@@ -122,23 +132,87 @@ class PlaybackController extends Notifier<PlaybackState> {
       await _player.play();
       return;
     }
-    _marked = episode.isPlayed;
+    // Re-read the row so a download that finished after this Episode object was
+    // captured is honoured — play the local file rather than streaming.
+    final fresh = await _db.episodeDao.getById(episode.id) ?? episode;
+    _marked = fresh.isPlayed;
     _lastSavedSec = -1000;
-    state = state.copyWith(episode: episode, podcast: podcast);
-    final localPath = episode.localPath;
-    final useLocal =
-        episode.downloadState == DownloadState.downloaded &&
-        localPath != null &&
-        File(localPath).existsSync();
+    _recovering = false;
+    state = state.copyWith(episode: fresh, podcast: podcast);
+    _watchEpisode(fresh.id);
     try {
       await _handler.loadAndPlay(
-        item: _mediaItem(episode, podcast),
-        uri: useLocal ? Uri.file(localPath) : Uri.parse(episode.audioUrl),
-        initialPosition: Duration(milliseconds: episode.positionMs),
+        item: _mediaItem(fresh, podcast),
+        uri: _sourceFor(fresh),
+        initialPosition: Duration(milliseconds: fresh.positionMs),
       );
     } catch (_) {
+      _episodeSub?.cancel();
       state = const PlaybackState();
       rethrow;
+    }
+  }
+
+  /// Best available source: the downloaded file when present, else the stream.
+  Uri _sourceFor(Episode e) =>
+      _isLocal(e) ? Uri.file(e.localPath!) : Uri.parse(e.audioUrl);
+
+  bool _isLocal(Episode e) {
+    final p = e.localPath;
+    return e.downloadState == DownloadState.downloaded &&
+        p != null &&
+        File(p).existsSync();
+  }
+
+  /// Keeps [state.episode] live (so the Now Playing download button reflects
+  /// reality) and, if the file finishes downloading mid-stream, swaps playback
+  /// over to the local file at the current position.
+  void _watchEpisode(int id) {
+    _episodeSub?.cancel();
+    _episodeSub = _db.episodeDao.watchById(id).listen(_onEpisodeChanged);
+  }
+
+  Future<void> _onEpisodeChanged(Episode? e) async {
+    final current = state.episode;
+    final podcast = state.podcast;
+    if (e == null || current == null || current.id != e.id || podcast == null) {
+      return;
+    }
+    final wasStreaming = !_isLocal(current);
+    state = state.copyWith(episode: e);
+    if (wasStreaming && _isLocal(e)) {
+      final resume = _player.playing;
+      final at = _player.position;
+      try {
+        await _handler.setSource(
+          item: _mediaItem(e, podcast),
+          uri: Uri.file(e.localPath!),
+          initialPosition: at,
+          play: resume,
+        );
+      } catch (_) {
+        // Keep the existing (streaming) source if the swap fails.
+      }
+    }
+  }
+
+  /// On a playback error, reload the best source at the last saved position so
+  /// the user can resume. Guarded to a single attempt to avoid retry loops.
+  Future<void> _onPlayerError(Object error) async {
+    final episode = state.episode;
+    final podcast = state.podcast;
+    if (episode == null || podcast == null || _recovering) return;
+    _recovering = true;
+    final fresh = await _db.episodeDao.getById(episode.id) ?? episode;
+    try {
+      await _handler.setSource(
+        item: _mediaItem(fresh, podcast),
+        uri: _sourceFor(fresh),
+        initialPosition: Duration(milliseconds: fresh.positionMs),
+        play: false,
+      );
+    } catch (_) {
+      // Leave the player as-is; the user can re-trigger playback.
     }
   }
 
@@ -192,6 +266,8 @@ class PlaybackController extends Notifier<PlaybackState> {
   }
 
   void _onPlayerState(PlayerState ps) {
+    // Player is healthy again — allow a future error to be recovered.
+    if (ps.processingState == ProcessingState.ready) _recovering = false;
     if (ps.processingState == ProcessingState.completed) {
       _handleCompletion();
     }
@@ -199,9 +275,20 @@ class PlaybackController extends Notifier<PlaybackState> {
 
   Future<void> _handleCompletion() async {
     final episode = state.episode;
-    if (episode != null) {
-      await _db.episodeDao.markCompleted(episode.id);
+    if (episode == null) return;
+    // A dropped network stream can surface as a premature "completed". If we
+    // ended well short of the known duration, treat it as a stall: recover at
+    // the saved position instead of marking the episode played.
+    final dur = _player.duration;
+    final pos = _player.position;
+    if (dur != null &&
+        dur.inSeconds > 0 &&
+        pos < dur * 0.98 &&
+        (dur - pos).inSeconds > 15) {
+      await _onPlayerError('premature completion');
+      return;
     }
+    await _db.episodeDao.markCompleted(episode.id);
     // "Sleep at end of episode" stops here regardless of the queue.
     if (state.sleepAtEnd) {
       state = state.copyWith(sleepAtEnd: false);
