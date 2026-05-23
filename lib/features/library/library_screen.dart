@@ -19,7 +19,6 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   final _controller = TextEditingController();
   String _query = '';
-  bool _reordering = false;
 
   @override
   void dispose() {
@@ -32,43 +31,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final library = ref.watch(libraryWithCountsProvider);
     final sort = ref.watch(librarySortProvider).value ?? LibrarySort.manual;
     final q = _query.trim().toLowerCase();
-    // Reorder is only meaningful on the full list in manual order.
-    final canReorder = sort == LibrarySort.manual && q.isEmpty;
-    if (!canReorder && _reordering) _reordering = false;
+    // Drag-reorder is only meaningful on the full list in manual order.
+    final reorderable = sort == LibrarySort.manual && q.isEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Library'),
         actions: [
-          if (_reordering)
-            TextButton(
-              onPressed: () => setState(() => _reordering = false),
-              child: const Text('Done'),
-            )
-          else ...[
-            if (canReorder)
-              IconButton(
-                icon: const Icon(Icons.swap_vert),
-                tooltip: 'Reorder',
-                onPressed: () => setState(() => _reordering = true),
-              ),
-            PopupMenuButton<LibrarySort>(
-              icon: const Icon(Icons.sort),
-              tooltip: 'Sort',
-              initialValue: sort,
-              onSelected: (s) {
-                if (_reordering) setState(() => _reordering = false);
-                ref.read(librarySortProvider.notifier).set(s);
-              },
-              itemBuilder: (context) => [
-                for (final s in LibrarySort.values)
-                  CheckedPopupMenuItem(
-                    value: s,
-                    checked: s == sort,
-                    child: Text(s.label),
-                  ),
-              ],
-            ),
-          ],
+          PopupMenuButton<LibrarySort>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort',
+            initialValue: sort,
+            onSelected: (s) =>
+                ref.read(librarySortProvider.notifier).set(s),
+            itemBuilder: (context) => [
+              for (final s in LibrarySort.values)
+                CheckedPopupMenuItem(
+                  value: s,
+                  checked: s == sort,
+                  child: Text(s.label),
+                ),
+            ],
+          ),
         ],
       ),
       body: library.when(
@@ -84,39 +67,25 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           _applySort(podcasts, sort);
           return Column(
             children: [
-              if (_reordering)
-                Container(
-                  width: double.infinity,
-                  color: kAccent.withValues(alpha: 0.12),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Drag tiles to reorder. Tap Done when finished.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: SearchBar(
-                    controller: _controller,
-                    hintText: 'Filter library',
-                    leading: const Icon(Icons.search),
-                    trailing: [
-                      if (_controller.text.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _controller.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
-                    ],
-                    onChanged: (v) => setState(() => _query = v),
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: SearchBar(
+                  controller: _controller,
+                  hintText: 'Filter library',
+                  leading: const Icon(Icons.search),
+                  trailing: [
+                    if (_controller.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _controller.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _query = v),
                 ),
+              ),
               Expanded(
                 child: podcasts.isEmpty
                     ? const Center(
@@ -125,7 +94,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           child: Text('No matches'),
                         ),
                       )
-                    : _reordering
+                    : reorderable
                         ? _buildReorderable(podcasts)
                         : _buildGrid(podcasts),
               ),

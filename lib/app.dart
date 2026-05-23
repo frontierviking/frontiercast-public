@@ -79,7 +79,11 @@ class _HomeShellState extends ConsumerState<HomeShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _quietRefresh());
+    // Let the first frames and initial scroll settle before kicking off the
+    // background refresh, so startup feels instant.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 3), _quietRefresh);
+    });
   }
 
   @override

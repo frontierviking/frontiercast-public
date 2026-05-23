@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:dart_rss/dart_rss.dart';
 import 'package:http/http.dart' as http;
 
@@ -71,48 +73,60 @@ class FeedParser {
       throw FeedException('HTTP ${resp.statusCode} fetching feed');
     }
 
-    final RssFeed feed;
+    // Parse off the main isolate: RSS parsing of large feeds is CPU-heavy and
+    // would otherwise jank the UI during background refreshes of many feeds.
+    final body = resp.body;
     try {
-      feed = RssFeed.parse(resp.body);
+      return await Isolate.run(() => _parseFeed(body, feedUrl));
+    } on FeedException {
+      rethrow;
     } catch (e) {
       throw FeedException('Could not parse feed: $e');
     }
+  }
+}
 
-    final episodes = <ParsedEpisode>[];
-    for (final item in feed.items) {
-      final audioUrl = item.enclosure?.url;
-      if (audioUrl == null || audioUrl.isEmpty) continue; // not playable
-      final guid = (item.guid != null && item.guid!.isNotEmpty)
-          ? item.guid!
-          : audioUrl;
-      final length = item.enclosure?.length;
-      episodes.add(
-        ParsedEpisode(
-          guid: guid,
-          title: item.title?.trim() ?? '(untitled)',
-          showNotes:
-              item.content?.value ?? item.description ?? item.itunes?.summary,
-          audioUrl: audioUrl,
-          imageUrl: _episodeImage(item),
-          link: item.link,
-          durationMs: item.itunes?.duration?.inMilliseconds,
-          sizeBytes: (length != null && length > 0) ? length : null,
-          pubDate: _parseDate(item.pubDate),
-        ),
-      );
-    }
+/// Pure, isolate-safe parse of a feed body into [ParsedFeed].
+ParsedFeed _parseFeed(String body, String feedUrl) {
+  final RssFeed feed;
+  try {
+    feed = RssFeed.parse(body);
+  } catch (e) {
+    throw FeedException('Could not parse feed: $e');
+  }
 
-    return ParsedFeed(
-      title: feed.title?.trim().isNotEmpty == true
-          ? feed.title!.trim()
-          : feedUrl,
-      imageUrl: feed.itunes?.image?.href ?? feed.image?.url,
-      author: feed.itunes?.author ?? feed.author,
-      description: feed.description ?? feed.itunes?.summary,
-      link: feed.link,
-      episodes: episodes,
+  final episodes = <ParsedEpisode>[];
+  for (final item in feed.items) {
+    final audioUrl = item.enclosure?.url;
+    if (audioUrl == null || audioUrl.isEmpty) continue; // not playable
+    final guid = (item.guid != null && item.guid!.isNotEmpty)
+        ? item.guid!
+        : audioUrl;
+    final length = item.enclosure?.length;
+    episodes.add(
+      ParsedEpisode(
+        guid: guid,
+        title: item.title?.trim() ?? '(untitled)',
+        showNotes:
+            item.content?.value ?? item.description ?? item.itunes?.summary,
+        audioUrl: audioUrl,
+        imageUrl: _episodeImage(item),
+        link: item.link,
+        durationMs: item.itunes?.duration?.inMilliseconds,
+        sizeBytes: (length != null && length > 0) ? length : null,
+        pubDate: _parseDate(item.pubDate),
+      ),
     );
   }
+
+  return ParsedFeed(
+    title: feed.title?.trim().isNotEmpty == true ? feed.title!.trim() : feedUrl,
+    imageUrl: feed.itunes?.image?.href ?? feed.image?.url,
+    author: feed.itunes?.author ?? feed.author,
+    description: feed.description ?? feed.itunes?.summary,
+    link: feed.link,
+    episodes: episodes,
+  );
 }
 
 const _months = {
