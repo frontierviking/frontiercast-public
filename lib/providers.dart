@@ -5,6 +5,9 @@ import 'data/db/database.dart';
 import 'data/feed/feed_parser.dart';
 import 'data/repositories/podcast_repository.dart';
 import 'data/search/itunes_search.dart';
+import 'data/search/podcast_index_search.dart';
+import 'data/search/podcast_index_settings.dart';
+import 'data/search/podcast_search.dart';
 import 'data/transcribe/transcribe_client.dart';
 import 'data/transcribe/transcribe_settings.dart';
 import 'services/audio_handler.dart';
@@ -22,6 +25,15 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 final feedParserProvider = Provider<FeedParser>((ref) => FeedParser());
 
 final itunesSearchProvider = Provider<ItunesSearch>((ref) => ItunesSearch());
+
+final podcastIndexSearchProvider = Provider<PodcastIndexSearch>(
+  (ref) => PodcastIndexSearch(),
+);
+
+final podcastIndexSettingsProvider =
+    AsyncNotifierProvider<PodcastIndexSettingsController, PodcastIndexSettings>(
+      PodcastIndexSettingsController.new,
+    );
 
 final podcastRepositoryProvider = Provider<PodcastRepository>(
   (ref) => PodcastRepository(
@@ -103,11 +115,42 @@ final queueProvider =
       (ref) => ref.watch(databaseProvider).watchQueue(),
     );
 
-/// iTunes search results for a query string.
+/// Podcast search results for a query string, merged from iTunes and (when
+/// API credentials are configured) Podcast Index. A failure in one source is
+/// ignored so the other still returns results; hits are de-duplicated by feed.
 final searchResultsProvider = FutureProvider.autoDispose
-    .family<List<ItunesPodcast>, String>((ref, query) async {
-      if (query.trim().isEmpty) return const [];
-      return ref.watch(itunesSearchProvider).search(query);
+    .family<List<PodcastSearchResult>, String>((ref, query) async {
+      final q = query.trim();
+      if (q.isEmpty) return const [];
+      final itunes = ref.watch(itunesSearchProvider);
+      final pi = ref.watch(podcastIndexSearchProvider);
+      final piSettings = ref.watch(podcastIndexSettingsProvider).value;
+
+      final futures = <Future<List<PodcastSearchResult>>>[
+        itunes.search(q).catchError((Object _) => <PodcastSearchResult>[]),
+        if (piSettings != null && piSettings.configured)
+          pi
+              .search(
+                q,
+                apiKey: piSettings.apiKey,
+                apiSecret: piSettings.apiSecret,
+              )
+              .catchError((Object _) => <PodcastSearchResult>[]),
+      ];
+      final lists = await Future.wait(futures);
+
+      final seen = <String>{};
+      final merged = <PodcastSearchResult>[];
+      for (final list in lists) {
+        for (final r in list) {
+          final key = r.feedUrl.trim().toLowerCase().replaceAll(
+            RegExp(r'/+$'),
+            '',
+          );
+          if (seen.add(key)) merged.add(r);
+        }
+      }
+      return merged;
     });
 
 /// Set of subscribed feed URLs, used to mark search results already in library.

@@ -7,6 +7,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-23
+
+### Added
+- Subscribe directly from the Search tab by pasting an RSS feed URL: the app
+  fetches and previews the feed (title, author, artwork) and lets you
+  subscribe in one tap. Covers podcasts that aren't in the iTunes catalog,
+  such as members-only feeds.
+- Podcast Index as a second search source, merged with iTunes results and
+  de-duplicated by feed. Enable it by entering a free Podcast Index API key
+  and secret in Settings → Search; credentials are stored on-device only.
+
 ## [1.1.0] - 2026-05-23
 
 ### Added
@@ -55,6 +66,7 @@ Initial release — a personal, ad-free Android podcast player.
 - Now Playing screen with download button, queue, sleep timer, and instant open.
 - README with features, build/run, and transcription setup.
 
-[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.2.0
 [1.1.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.1.0
 [1.0.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.0.0

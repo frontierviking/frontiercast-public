@@ -2,26 +2,14 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-class ItunesPodcast {
-  final String title;
-  final String? author;
-  final String feedUrl;
-  final String? artworkUrl;
-
-  ItunesPodcast({
-    required this.title,
-    this.author,
-    required this.feedUrl,
-    this.artworkUrl,
-  });
-}
+import 'podcast_search.dart';
 
 /// Thin client over the public iTunes Search API (no key required).
 class ItunesSearch {
   final http.Client _client;
   ItunesSearch([http.Client? client]) : _client = client ?? http.Client();
 
-  Future<List<ItunesPodcast>> search(String term, {int limit = 25}) async {
+  Future<List<PodcastSearchResult>> search(String term, {int limit = 25}) async {
     final q = term.trim();
     if (q.isEmpty) return [];
     final uri = Uri.https('itunes.apple.com', '/search', {
@@ -39,7 +27,7 @@ class ItunesSearch {
     return results
         .cast<Map<String, dynamic>>()
         .map(
-          (m) => ItunesPodcast(
+          (m) => PodcastSearchResult(
             title: (m['collectionName'] ?? m['trackName'] ?? '') as String,
             author: m['artistName'] as String?,
             feedUrl: (m['feedUrl'] ?? '') as String,

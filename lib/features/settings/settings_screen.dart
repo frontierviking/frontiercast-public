@@ -16,6 +16,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(transcribeSettingsProvider).value;
     final playback = ref.watch(playbackSettingsProvider).value;
+    final podcastIndex = ref.watch(podcastIndexSettingsProvider).value;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -74,6 +75,63 @@ class SettingsScreen extends ConsumerWidget {
               onPick: (s) =>
                   ref.read(playbackSettingsProvider.notifier).setBackward(s),
             ),
+          ),
+          const Divider(),
+          const _SectionHeader('Search (Podcast Index)'),
+          ListTile(
+            leading: const Icon(Icons.travel_explore),
+            title: const Text('Status'),
+            subtitle: Text(
+              podcastIndex == null
+                  ? '…'
+                  : podcastIndex.configured
+                  ? 'Enabled — searched alongside iTunes'
+                  : 'Off — add a free API key from podcastindex.org',
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.vpn_key_outlined),
+            title: const Text('API key'),
+            subtitle: Text(
+              podcastIndex == null
+                  ? '…'
+                  : podcastIndex.apiKey.isEmpty
+                  ? 'Not set'
+                  : _mask(podcastIndex.apiKey),
+            ),
+            onTap: podcastIndex == null
+                ? null
+                : () => _editText(
+                    context,
+                    title: 'Podcast Index API key',
+                    hint: 'key',
+                    initial: podcastIndex.apiKey,
+                    onSave: (v) => ref
+                        .read(podcastIndexSettingsProvider.notifier)
+                        .setKey(v),
+                  ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.password_outlined),
+            title: const Text('API secret'),
+            subtitle: Text(
+              podcastIndex == null
+                  ? '…'
+                  : podcastIndex.apiSecret.isEmpty
+                  ? 'Not set'
+                  : _mask(podcastIndex.apiSecret),
+            ),
+            onTap: podcastIndex == null
+                ? null
+                : () => _editText(
+                    context,
+                    title: 'Podcast Index API secret',
+                    hint: 'secret',
+                    initial: podcastIndex.apiSecret,
+                    onSave: (v) => ref
+                        .read(podcastIndexSettingsProvider.notifier)
+                        .setSecret(v),
+                  ),
           ),
           const Divider(),
           const _SectionHeader('Transcription (Whisper)'),
