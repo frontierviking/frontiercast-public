@@ -7,6 +7,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-24
+
+### Added
+- Transcript button in the Now Playing screen, so you can open (or generate)
+  the transcript of the current episode without leaving the player. The icon
+  is filled when a transcript already exists.
+
 ## [1.2.1] - 2026-05-24
 
 ### Fixed
@@ -73,7 +80,8 @@ Initial release — a personal, ad-free Android podcast player.
 - Now Playing screen with download button, queue, sleep timer, and instant open.
 - README with features, build/run, and transcription setup.
 
-[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.3.0
 [1.2.1]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.2.1
 [1.2.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.2.0
 [1.1.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.1.0

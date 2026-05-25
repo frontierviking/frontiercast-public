@@ -8,6 +8,7 @@ import '../../services/playback_controller.dart';
 import '../../util/format.dart';
 import '../downloads/download_button.dart';
 import '../queue/queue_screen.dart';
+import '../transcript/transcript_screen.dart';
 import 'skip_seconds_dialog.dart';
 
 const _speeds = [0.8, 1.0, 1.2, 1.5, 1.75, 2.0];
@@ -49,6 +50,20 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
         title: const Text('Now Playing'),
         actions: [
           DownloadButton(episode: episode),
+          IconButton(
+            tooltip: 'Transcript',
+            icon: Icon(
+              ref.watch(transcriptProvider(episode.id)).value != null
+                  ? Icons.article
+                  : Icons.article_outlined,
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    TranscriptScreen(episode: episode, podcast: podcast),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'Up next',
             icon: const Icon(Icons.queue_music),
