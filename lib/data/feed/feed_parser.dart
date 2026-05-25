@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:dart_rss/dart_rss.dart';
@@ -73,9 +74,17 @@ class FeedParser {
       throw FeedException('HTTP ${resp.statusCode} fetching feed');
     }
 
+    // Decode as UTF-8 unless the server declared a charset. The http package
+    // otherwise falls back to Latin-1 for charset-less responses, which mangles
+    // UTF-8 titles (curly quotes, em-dashes, accents) — most podcast feeds are
+    // UTF-8 but omit the charset from the Content-Type header.
+    final contentType = resp.headers['content-type']?.toLowerCase() ?? '';
+    final body = contentType.contains('charset=')
+        ? resp.body
+        : utf8.decode(resp.bodyBytes, allowMalformed: true);
+
     // Parse off the main isolate: RSS parsing of large feeds is CPU-heavy and
     // would otherwise jank the UI during background refreshes of many feeds.
-    final body = resp.body;
     try {
       return await Isolate.run(() => _parseFeed(body, feedUrl));
     } on FeedException {
