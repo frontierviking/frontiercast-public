@@ -15,6 +15,7 @@ import 'services/download_controller.dart';
 import 'services/library_settings.dart';
 import 'services/playback_controller.dart';
 import 'services/playback_settings.dart';
+import 'services/transcribe_controller.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -97,6 +98,10 @@ final downloadingProvider =
 final transcribeClientProvider = Provider<TranscribeClient>(
   (ref) => TranscribeClient(),
 );
+
+/// Episodes currently being transcribed (by id).
+final transcribeControllerProvider =
+    NotifierProvider<TranscribeController, Set<int>>(TranscribeController.new);
 
 final transcribeSettingsProvider =
     AsyncNotifierProvider<TranscribeSettingsController, TranscribeSettings>(

@@ -14,34 +14,16 @@ class TranscriptScreen extends ConsumerStatefulWidget {
 }
 
 class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
-  bool _busy = false;
   String? _error;
 
   Future<void> _transcribe() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _error = null);
     try {
-      final settings = await ref.read(transcribeSettingsProvider.future);
-      final text = await ref
-          .read(transcribeClientProvider)
-          .transcribe(
-            baseUrl: settings.url,
-            token: settings.token,
-            audioUrl: widget.episode.audioUrl,
-            guid: widget.episode.guid,
-            title: widget.episode.title,
-            podcast: widget.podcast?.title,
-          );
       await ref
-          .read(databaseProvider)
-          .transcriptDao
-          .upsert(widget.episode.id, text, null);
+          .read(transcribeControllerProvider.notifier)
+          .transcribe(widget.episode, widget.podcast);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -49,6 +31,9 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final transcript = ref.watch(transcriptProvider(widget.episode.id)).value;
+    final busy = ref
+        .watch(transcribeControllerProvider)
+        .contains(widget.episode.id);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transcript')),
@@ -77,7 +62,7 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
           : Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: _busy
+                child: busy
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [

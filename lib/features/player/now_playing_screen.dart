@@ -52,11 +52,17 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
           DownloadButton(episode: episode),
           IconButton(
             tooltip: 'Transcript',
-            icon: Icon(
-              ref.watch(transcriptProvider(episode.id)).value != null
-                  ? Icons.article
-                  : Icons.article_outlined,
-            ),
+            icon: ref.watch(transcribeControllerProvider).contains(episode.id)
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    ref.watch(transcriptProvider(episode.id)).value != null
+                        ? Icons.article
+                        : Icons.article_outlined,
+                  ),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) =>
