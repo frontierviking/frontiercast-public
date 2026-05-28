@@ -845,6 +845,21 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _unavailableMeta = const VerificationMeta(
+    'unavailable',
+  );
+  @override
+  late final GeneratedColumn<bool> unavailable = GeneratedColumn<bool>(
+    'unavailable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("unavailable" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -862,6 +877,7 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
     downloadState,
     positionMs,
     isPlayed,
+    unavailable,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -964,6 +980,15 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
         isPlayed.isAcceptableOrUnknown(data['is_played']!, _isPlayedMeta),
       );
     }
+    if (data.containsKey('unavailable')) {
+      context.handle(
+        _unavailableMeta,
+        unavailable.isAcceptableOrUnknown(
+          data['unavailable']!,
+          _unavailableMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1039,6 +1064,10 @@ class $EpisodesTable extends Episodes with TableInfo<$EpisodesTable, Episode> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_played'],
       )!,
+      unavailable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}unavailable'],
+      )!,
     );
   }
 
@@ -1067,6 +1096,11 @@ class Episode extends DataClass implements Insertable<Episode> {
   final DownloadState downloadState;
   final int positionMs;
   final bool isPlayed;
+
+  /// Set when a playback attempt fails to load the source (e.g. HTTP 404), so
+  /// the episode list can grey it out. Cleared on a successful play or when a
+  /// feed refresh re-confirms the episode.
+  final bool unavailable;
   const Episode({
     required this.id,
     required this.podcastId,
@@ -1083,6 +1117,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     required this.downloadState,
     required this.positionMs,
     required this.isPlayed,
+    required this.unavailable,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1120,6 +1155,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     }
     map['position_ms'] = Variable<int>(positionMs);
     map['is_played'] = Variable<bool>(isPlayed);
+    map['unavailable'] = Variable<bool>(unavailable);
     return map;
   }
 
@@ -1152,6 +1188,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       downloadState: Value(downloadState),
       positionMs: Value(positionMs),
       isPlayed: Value(isPlayed),
+      unavailable: Value(unavailable),
     );
   }
 
@@ -1178,6 +1215,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       ),
       positionMs: serializer.fromJson<int>(json['positionMs']),
       isPlayed: serializer.fromJson<bool>(json['isPlayed']),
+      unavailable: serializer.fromJson<bool>(json['unavailable']),
     );
   }
   @override
@@ -1201,6 +1239,7 @@ class Episode extends DataClass implements Insertable<Episode> {
       ),
       'positionMs': serializer.toJson<int>(positionMs),
       'isPlayed': serializer.toJson<bool>(isPlayed),
+      'unavailable': serializer.toJson<bool>(unavailable),
     };
   }
 
@@ -1220,6 +1259,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     DownloadState? downloadState,
     int? positionMs,
     bool? isPlayed,
+    bool? unavailable,
   }) => Episode(
     id: id ?? this.id,
     podcastId: podcastId ?? this.podcastId,
@@ -1236,6 +1276,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     downloadState: downloadState ?? this.downloadState,
     positionMs: positionMs ?? this.positionMs,
     isPlayed: isPlayed ?? this.isPlayed,
+    unavailable: unavailable ?? this.unavailable,
   );
   Episode copyWithCompanion(EpisodesCompanion data) {
     return Episode(
@@ -1260,6 +1301,9 @@ class Episode extends DataClass implements Insertable<Episode> {
           ? data.positionMs.value
           : this.positionMs,
       isPlayed: data.isPlayed.present ? data.isPlayed.value : this.isPlayed,
+      unavailable: data.unavailable.present
+          ? data.unavailable.value
+          : this.unavailable,
     );
   }
 
@@ -1280,7 +1324,8 @@ class Episode extends DataClass implements Insertable<Episode> {
           ..write('localPath: $localPath, ')
           ..write('downloadState: $downloadState, ')
           ..write('positionMs: $positionMs, ')
-          ..write('isPlayed: $isPlayed')
+          ..write('isPlayed: $isPlayed, ')
+          ..write('unavailable: $unavailable')
           ..write(')'))
         .toString();
   }
@@ -1302,6 +1347,7 @@ class Episode extends DataClass implements Insertable<Episode> {
     downloadState,
     positionMs,
     isPlayed,
+    unavailable,
   );
   @override
   bool operator ==(Object other) =>
@@ -1321,7 +1367,8 @@ class Episode extends DataClass implements Insertable<Episode> {
           other.localPath == this.localPath &&
           other.downloadState == this.downloadState &&
           other.positionMs == this.positionMs &&
-          other.isPlayed == this.isPlayed);
+          other.isPlayed == this.isPlayed &&
+          other.unavailable == this.unavailable);
 }
 
 class EpisodesCompanion extends UpdateCompanion<Episode> {
@@ -1340,6 +1387,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
   final Value<DownloadState> downloadState;
   final Value<int> positionMs;
   final Value<bool> isPlayed;
+  final Value<bool> unavailable;
   const EpisodesCompanion({
     this.id = const Value.absent(),
     this.podcastId = const Value.absent(),
@@ -1356,6 +1404,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     this.downloadState = const Value.absent(),
     this.positionMs = const Value.absent(),
     this.isPlayed = const Value.absent(),
+    this.unavailable = const Value.absent(),
   });
   EpisodesCompanion.insert({
     this.id = const Value.absent(),
@@ -1373,6 +1422,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     this.downloadState = const Value.absent(),
     this.positionMs = const Value.absent(),
     this.isPlayed = const Value.absent(),
+    this.unavailable = const Value.absent(),
   }) : podcastId = Value(podcastId),
        guid = Value(guid),
        title = Value(title),
@@ -1393,6 +1443,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     Expression<int>? downloadState,
     Expression<int>? positionMs,
     Expression<bool>? isPlayed,
+    Expression<bool>? unavailable,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1410,6 +1461,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
       if (downloadState != null) 'download_state': downloadState,
       if (positionMs != null) 'position_ms': positionMs,
       if (isPlayed != null) 'is_played': isPlayed,
+      if (unavailable != null) 'unavailable': unavailable,
     });
   }
 
@@ -1429,6 +1481,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     Value<DownloadState>? downloadState,
     Value<int>? positionMs,
     Value<bool>? isPlayed,
+    Value<bool>? unavailable,
   }) {
     return EpisodesCompanion(
       id: id ?? this.id,
@@ -1446,6 +1499,7 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
       downloadState: downloadState ?? this.downloadState,
       positionMs: positionMs ?? this.positionMs,
       isPlayed: isPlayed ?? this.isPlayed,
+      unavailable: unavailable ?? this.unavailable,
     );
   }
 
@@ -1499,6 +1553,9 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
     if (isPlayed.present) {
       map['is_played'] = Variable<bool>(isPlayed.value);
     }
+    if (unavailable.present) {
+      map['unavailable'] = Variable<bool>(unavailable.value);
+    }
     return map;
   }
 
@@ -1519,7 +1576,8 @@ class EpisodesCompanion extends UpdateCompanion<Episode> {
           ..write('localPath: $localPath, ')
           ..write('downloadState: $downloadState, ')
           ..write('positionMs: $positionMs, ')
-          ..write('isPlayed: $isPlayed')
+          ..write('isPlayed: $isPlayed, ')
+          ..write('unavailable: $unavailable')
           ..write(')'))
         .toString();
   }
@@ -2497,6 +2555,7 @@ typedef $$EpisodesTableCreateCompanionBuilder =
       Value<DownloadState> downloadState,
       Value<int> positionMs,
       Value<bool> isPlayed,
+      Value<bool> unavailable,
     });
 typedef $$EpisodesTableUpdateCompanionBuilder =
     EpisodesCompanion Function({
@@ -2515,6 +2574,7 @@ typedef $$EpisodesTableUpdateCompanionBuilder =
       Value<DownloadState> downloadState,
       Value<int> positionMs,
       Value<bool> isPlayed,
+      Value<bool> unavailable,
     });
 
 final class $$EpisodesTableReferences
@@ -2652,6 +2712,11 @@ class $$EpisodesTableFilterComposer
 
   ColumnFilters<bool> get isPlayed => $composableBuilder(
     column: $table.isPlayed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get unavailable => $composableBuilder(
+    column: $table.unavailable,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2808,6 +2873,11 @@ class $$EpisodesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get unavailable => $composableBuilder(
+    column: $table.unavailable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$PodcastsTableOrderingComposer get podcastId {
     final $$PodcastsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2889,6 +2959,11 @@ class $$EpisodesTableAnnotationComposer
 
   GeneratedColumn<bool> get isPlayed =>
       $composableBuilder(column: $table.isPlayed, builder: (column) => column);
+
+  GeneratedColumn<bool> get unavailable => $composableBuilder(
+    column: $table.unavailable,
+    builder: (column) => column,
+  );
 
   $$PodcastsTableAnnotationComposer get podcastId {
     final $$PodcastsTableAnnotationComposer composer = $composerBuilder(
@@ -3011,6 +3086,7 @@ class $$EpisodesTableTableManager
                 Value<DownloadState> downloadState = const Value.absent(),
                 Value<int> positionMs = const Value.absent(),
                 Value<bool> isPlayed = const Value.absent(),
+                Value<bool> unavailable = const Value.absent(),
               }) => EpisodesCompanion(
                 id: id,
                 podcastId: podcastId,
@@ -3027,6 +3103,7 @@ class $$EpisodesTableTableManager
                 downloadState: downloadState,
                 positionMs: positionMs,
                 isPlayed: isPlayed,
+                unavailable: unavailable,
               ),
           createCompanionCallback:
               ({
@@ -3045,6 +3122,7 @@ class $$EpisodesTableTableManager
                 Value<DownloadState> downloadState = const Value.absent(),
                 Value<int> positionMs = const Value.absent(),
                 Value<bool> isPlayed = const Value.absent(),
+                Value<bool> unavailable = const Value.absent(),
               }) => EpisodesCompanion.insert(
                 id: id,
                 podcastId: podcastId,
@@ -3061,6 +3139,7 @@ class $$EpisodesTableTableManager
                 downloadState: downloadState,
                 positionMs: positionMs,
                 isPlayed: isPlayed,
+                unavailable: unavailable,
               ),
           withReferenceMapper: (p0) => p0
               .map(

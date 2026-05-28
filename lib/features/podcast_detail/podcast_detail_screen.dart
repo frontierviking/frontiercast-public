@@ -63,7 +63,7 @@ class PodcastDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: const MiniPlayer(),
+      bottomNavigationBar: const MiniPlayer(useSafeArea: true),
       body: RefreshIndicator(
         onRefresh: () async {
           try {
@@ -338,6 +338,18 @@ class _EpisodeTile extends ConsumerWidget {
       formatBytes(episode.sizeBytes),
     ].where((s) => s.isNotEmpty).join('  ·  ');
 
+    Widget thumb = _EpisodeThumb(
+      imageUrl: episode.imageUrl ?? podcast?.imageUrl,
+      unplayed: !episode.isPlayed,
+    );
+    if (episode.unavailable) {
+      // Desaturate the artwork to signal the episode can't be played.
+      thumb = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
+        child: thumb,
+      );
+    }
+
     return InkWell(
       onTap: () =>
           showEpisodeDetailSheet(context, episode: episode, podcast: podcast),
@@ -355,10 +367,7 @@ class _EpisodeTile extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _EpisodeThumb(
-                  imageUrl: episode.imageUrl ?? podcast?.imageUrl,
-                  unplayed: !episode.isPlayed,
-                ),
+                thumb,
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -372,7 +381,9 @@ class _EpisodeTile extends ConsumerWidget {
                           fontWeight: FontWeight.w600,
                           color: isCurrent
                               ? scheme.primary
-                              : (episode.isPlayed ? theme.disabledColor : null),
+                              : (episode.isPlayed || episode.unavailable
+                                    ? theme.disabledColor
+                                    : null),
                         ),
                       ),
                       if (meta.isNotEmpty) ...[
@@ -384,7 +395,26 @@ class _EpisodeTile extends ConsumerWidget {
                           ),
                         ),
                       ],
-                      if (episode.isPlayed) ...[
+                      if (episode.unavailable) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.cloud_off,
+                              size: 14,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Unavailable',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else if (episode.isPlayed) ...[
                         const SizedBox(height: 6),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -434,3 +464,11 @@ class _EpisodeTile extends ConsumerWidget {
     );
   }
 }
+
+/// Luminance-weighted matrix that renders an image in greyscale.
+const _grayscaleMatrix = <double>[
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0, 0, 0, 1, 0, //
+];

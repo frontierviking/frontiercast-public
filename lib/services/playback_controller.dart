@@ -157,6 +157,12 @@ class PlaybackController extends Notifier<PlaybackState> {
       );
     } catch (e) {
       _episodeSub?.cancel();
+      // A dead source (404 etc.) marks the episode unavailable so the list can
+      // grey it out. Don't penalise plain connectivity failures — those are
+      // transient and would wrongly grey everything while offline.
+      if (!_isNetworkError(e)) {
+        await _db.episodeDao.setUnavailable(fresh.id, true);
+      }
       // Load errors (e.g. HTTP 404 on the audio URL) come through here rather
       // than the runtime playbackEventStream, so we surface them ourselves.
       state = PlaybackState(
@@ -288,8 +294,15 @@ class PlaybackController extends Notifier<PlaybackState> {
   }
 
   void _onPlayerState(PlayerState ps) {
-    // Player is healthy again — allow a future error to be recovered.
-    if (ps.processingState == ProcessingState.ready) _recovering = false;
+    // Player is healthy again — allow a future error to be recovered and clear
+    // any stale "unavailable" flag now that this episode loaded fine.
+    if (ps.processingState == ProcessingState.ready) {
+      _recovering = false;
+      final ep = state.episode;
+      if (ep != null && ep.unavailable) {
+        _db.episodeDao.setUnavailable(ep.id, false);
+      }
+    }
     if (ps.processingState == ProcessingState.completed) {
       _handleCompletion();
     }
@@ -335,6 +348,16 @@ class PlaybackController extends Notifier<PlaybackState> {
     _lastSavedSec = _player.position.inSeconds;
     await _db.episodeDao.updatePosition(episode.id, ms);
   }
+}
+
+/// True when an error looks like transient connectivity rather than a dead
+/// source — used to avoid greying out episodes just because the user is offline.
+bool _isNetworkError(Object error) {
+  final s = error.toString();
+  return s.contains('SocketException') ||
+      s.contains('Failed host lookup') ||
+      s.contains('Unable to connect') ||
+      s.contains('Network is unreachable');
 }
 
 /// Best-effort mapping of a player exception to a user-readable message.

@@ -7,6 +7,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-28
+
+### Added
+- Episodes whose audio source fails to load (e.g. a 404 — the publisher removed
+  or moved it) are now greyed out and tagged "Unavailable" in the episode list,
+  so a still-playable newer episode stands out. The flag clears automatically on
+  a successful play or when a feed refresh re-confirms the episode (drift schema
+  v9). Transient network failures don't grey episodes.
+
+## [1.4.1] - 2026-05-28
+
+### Fixed
+- The mini-player no longer slides under Android's gesture/navigation bar on a
+  podcast's episode list. It now respects the bottom system inset when it's the
+  bottom-most bar (it didn't need to in the main tabs, where the navigation bar
+  already absorbs that inset).
+
 ## [1.4.0] - 2026-05-25
 
 ### Added

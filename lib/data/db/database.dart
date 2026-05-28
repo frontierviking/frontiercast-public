@@ -43,6 +43,11 @@ class Episodes extends Table {
   IntColumn get positionMs => integer().withDefault(const Constant(0))();
   BoolColumn get isPlayed => boolean().withDefault(const Constant(false))();
 
+  /// Set when a playback attempt fails to load the source (e.g. HTTP 404), so
+  /// the episode list can grey it out. Cleared on a successful play or when a
+  /// feed refresh re-confirms the episode.
+  BoolColumn get unavailable => boolean().withDefault(const Constant(false))();
+
   // A feed item is unique by its guid within a single podcast.
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -221,6 +226,13 @@ class EpisodeDao extends DatabaseAccessor<AppDatabase> with _$EpisodeDaoMixin {
         ),
       );
 
+  /// Flags (or clears) an episode whose source failed to load, so the list can
+  /// grey it out.
+  Future<void> setUnavailable(int id, bool value) =>
+      (update(episodes)..where((t) => t.id.equals(id))).write(
+        EpisodesCompanion(unavailable: Value(value)),
+      );
+
   /// Inserts new episodes and refreshes feed metadata on existing ones,
   /// without clobbering user state (position, played flag, downloads).
   Future<void> upsertAll(List<EpisodesCompanion> rows) async {
@@ -239,6 +251,9 @@ class EpisodeDao extends DatabaseAccessor<AppDatabase> with _$EpisodeDaoMixin {
               durationMs: r.durationMs,
               sizeBytes: r.sizeBytes,
               pubDate: r.pubDate,
+              // Still in the feed → clear any prior "unavailable" so a refreshed
+              // (possibly fixed) URL gets another chance to play.
+              unavailable: const Value(false),
             ),
             target: [episodes.podcastId, episodes.guid],
           ),
@@ -403,7 +418,7 @@ class AppDatabase extends _$AppDatabase {
       _watchEpisodesInState(DownloadState.downloading);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -444,6 +459,9 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(podcasts, podcasts.sortIndex);
         // Seed manual order with insertion order (≈ time added).
         await customStatement('UPDATE podcasts SET sort_index = id');
+      }
+      if (from < 9) {
+        await m.addColumn(episodes, episodes.unavailable);
       }
     },
     beforeOpen: (details) async {

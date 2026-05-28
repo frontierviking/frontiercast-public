@@ -9,7 +9,11 @@ import 'now_playing_screen.dart';
 /// Persistent bottom bar: the single play/pause control whenever an episode is
 /// loaded. Tapping it opens the full-screen player.
 class MiniPlayer extends ConsumerWidget {
-  const MiniPlayer({super.key});
+  /// Add bottom padding for the system navigation inset. Needed when the
+  /// MiniPlayer is the bottom-most widget (e.g. a screen's bottomNavigationBar);
+  /// not needed in HomeShell where the NavigationBar below it absorbs the inset.
+  final bool useSafeArea;
+  const MiniPlayer({super.key, this.useSafeArea = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,6 +37,8 @@ class MiniPlayer extends ConsumerWidget {
         ? posData.position.inMilliseconds / posData.duration.inMilliseconds
         : 0.0;
 
+    final bottomInset = useSafeArea ? MediaQuery.paddingOf(context).bottom : 0.0;
+
     return Material(
       color: scheme.surfaceContainerHigh,
       child: InkWell(
@@ -49,7 +55,7 @@ class MiniPlayer extends ConsumerWidget {
               backgroundColor: Colors.transparent,
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: EdgeInsets.fromLTRB(8, 6, 8, 6 + bottomInset),
               child: Row(
                 children: [
                   ClipRRect(
