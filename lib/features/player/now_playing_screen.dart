@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../services/playback_controller.dart';
 import '../../util/format.dart';
@@ -47,28 +48,40 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Now Playing'),
         actions: [
-          DownloadButton(episode: episode),
           IconButton(
-            tooltip: 'Transcript',
-            icon: ref.watch(transcribeControllerProvider).contains(episode.id)
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    ref.watch(transcriptProvider(episode.id)).value != null
-                        ? Icons.article
-                        : Icons.article_outlined,
+            tooltip: 'Description',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => _showDescriptionSheet(context, episode, podcast),
+          ),
+          DownloadButton(episode: episode),
+          Builder(
+            builder: (context) {
+              final status = ref.watch(transcribeControllerProvider)[episode.id];
+              return IconButton(
+                tooltip: 'Transcript',
+                icon: status != null
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: status.progress > 0 ? status.progress : null,
+                        ),
+                      )
+                    : Icon(
+                        ref.watch(transcriptProvider(episode.id)).value != null
+                            ? Icons.article
+                            : Icons.article_outlined,
+                      ),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        TranscriptScreen(episode: episode, podcast: podcast),
                   ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    TranscriptScreen(episode: episode, podcast: podcast),
-              ),
-            ),
+                ),
+              );
+            },
           ),
           IconButton(
             tooltip: 'Up next',
@@ -294,6 +307,75 @@ class _SkipButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showDescriptionSheet(
+  BuildContext context,
+  Episode episode,
+  Podcast? podcast,
+) {
+  final notes = stripHtml(episode.showNotes);
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  episode.title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (podcast != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    podcast.title,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Flexible(
+                  child: notes.isEmpty
+                      ? Text(
+                          'No description',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : Scrollbar(
+                          child: SingleChildScrollView(
+                            child: SelectableText(
+                              notes,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 Future<void> _chooseSkip(

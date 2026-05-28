@@ -3,6 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database.dart';
 import '../../providers.dart';
+import '../../services/transcribe_controller.dart';
+
+String _statusLabel(TranscribeStatus s) {
+  final pct = (s.progress * 100).round();
+  return switch (s.stage) {
+    'downloading' => s.progress > 0 ? 'Downloading… $pct%' : 'Downloading…',
+    'transcribing' => 'Transcribing… $pct%',
+    _ => 'Transcribing on your Mac…',
+  };
+}
 
 class TranscriptScreen extends ConsumerStatefulWidget {
   final Episode episode;
@@ -31,9 +41,8 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final transcript = ref.watch(transcriptProvider(widget.episode.id)).value;
-    final busy = ref
-        .watch(transcribeControllerProvider)
-        .contains(widget.episode.id);
+    final status = ref.watch(transcribeControllerProvider)[widget.episode.id];
+    final busy = status != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transcript')),
@@ -66,10 +75,18 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CircularProgressIndicator(),
+                          SizedBox(
+                            width: 64,
+                            height: 64,
+                            child: CircularProgressIndicator(
+                              value: status.progress > 0
+                                  ? status.progress
+                                  : null,
+                            ),
+                          ),
                           const SizedBox(height: 20),
                           Text(
-                            'Transcribing on your Mac…',
+                            _statusLabel(status),
                             style: theme.textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),

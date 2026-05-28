@@ -159,20 +159,22 @@ class EpisodeDetailSheet extends ConsumerWidget {
                       ),
                     );
                   },
-                  icon:
-                      ref
-                          .watch(transcribeControllerProvider)
-                          .contains(episode.id)
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          ref.watch(transcriptProvider(episode.id)).value != null
-                              ? Icons.article
-                              : Icons.article_outlined,
-                        ),
+                  icon: switch (ref
+                      .watch(transcribeControllerProvider)[episode.id]) {
+                    final status? => SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: status.progress > 0 ? status.progress : null,
+                      ),
+                    ),
+                    null => Icon(
+                      ref.watch(transcriptProvider(episode.id)).value != null
+                          ? Icons.article
+                          : Icons.article_outlined,
+                    ),
+                  },
                 ),
                 IconButton(
                   tooltip: 'Share',

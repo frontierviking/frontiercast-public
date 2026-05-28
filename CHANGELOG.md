@@ -7,6 +7,28 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-25
+
+### Added
+- Real transcription progress. The Mac server now streams progress as it
+  downloads the audio and as Whisper works, so the transcript buttons show a
+  filling progress circle (with a "Downloading… / Transcribing… N%" label on the
+  transcript screen) instead of an indeterminate spinner.
+- View the episode description from the Now Playing screen — tap the info
+  button in the top bar to open a bottom sheet with the full show notes.
+
+### Changed
+- The transcription server streams NDJSON progress over a single request. **The
+  Python server must be restarted** to pick this up; older app builds remain
+  compatible only with the old server, so update both together.
+
+### Fixed
+- Playback failures now surface a snackbar with a friendly message (e.g.
+  "Episode unavailable — the audio file couldn’t be loaded. The publisher may
+  have removed or moved it.") instead of silently doing nothing — episodes that
+  have been dropped from a feed or whose CDN URL has expired are no longer
+  mystery dead taps.
+
 ## [1.3.1] - 2026-05-24
 
 ### Changed
@@ -88,7 +110,8 @@ Initial release — a personal, ad-free Android podcast player.
 - Now Playing screen with download button, queue, sleep timer, and instant open.
 - README with features, build/run, and transcription setup.
 
-[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/frontierviking/frontiercast-public/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.4.0
 [1.3.1]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.3.1
 [1.3.0]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.3.0
 [1.2.1]: https://github.com/frontierviking/frontiercast-public/releases/tag/v1.2.1

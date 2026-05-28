@@ -31,11 +31,16 @@ class PlaybackState {
   /// When true, playback stops at the end of the current episode.
   final bool sleepAtEnd;
 
+  /// Most recent playback failure, used to surface a one-shot snackbar.
+  /// The timestamp makes each error distinct so listeners can detect new ones.
+  final ({String message, DateTime at})? lastError;
+
   const PlaybackState({
     this.episode,
     this.podcast,
     this.sleepEnd,
     this.sleepAtEnd = false,
+    this.lastError,
   });
 
   bool get sleepActive => sleepEnd != null || sleepAtEnd;
@@ -45,6 +50,7 @@ class PlaybackState {
     Podcast? podcast,
     Object? sleepEnd = _unset,
     bool? sleepAtEnd,
+    Object? lastError = _unset,
   }) {
     return PlaybackState(
       episode: episode ?? this.episode,
@@ -53,6 +59,9 @@ class PlaybackState {
           ? this.sleepEnd
           : sleepEnd as DateTime?,
       sleepAtEnd: sleepAtEnd ?? this.sleepAtEnd,
+      lastError: identical(lastError, _unset)
+          ? this.lastError
+          : lastError as ({String message, DateTime at})?,
     );
   }
 }
@@ -146,9 +155,16 @@ class PlaybackController extends Notifier<PlaybackState> {
         uri: _sourceFor(fresh),
         initialPosition: Duration(milliseconds: fresh.positionMs),
       );
-    } catch (_) {
+    } catch (e) {
       _episodeSub?.cancel();
-      state = const PlaybackState();
+      // Load errors (e.g. HTTP 404 on the audio URL) come through here rather
+      // than the runtime playbackEventStream, so we surface them ourselves.
+      state = PlaybackState(
+        lastError: (
+          message: _friendlyPlaybackError(e),
+          at: DateTime.now(),
+        ),
+      );
       rethrow;
     }
   }
@@ -196,12 +212,18 @@ class PlaybackController extends Notifier<PlaybackState> {
     }
   }
 
-  /// On a playback error, reload the best source at the last saved position so
-  /// the user can resume. Guarded to a single attempt to avoid retry loops.
+  /// On a playback error: surface a friendly message to the UI, then reload
+  /// the best source at the last saved position so the user can resume. The
+  /// reload is guarded to a single attempt to avoid retry loops, but the error
+  /// is always reported so the snackbar fires.
   Future<void> _onPlayerError(Object error) async {
     final episode = state.episode;
     final podcast = state.podcast;
-    if (episode == null || podcast == null || _recovering) return;
+    if (episode == null || podcast == null) return;
+    state = state.copyWith(
+      lastError: (message: _friendlyPlaybackError(error), at: DateTime.now()),
+    );
+    if (_recovering) return;
     _recovering = true;
     final fresh = await _db.episodeDao.getById(episode.id) ?? episode;
     try {
@@ -313,4 +335,37 @@ class PlaybackController extends Notifier<PlaybackState> {
     _lastSavedSec = _player.position.inSeconds;
     await _db.episodeDao.updatePosition(episode.id, ms);
   }
+}
+
+/// Best-effort mapping of a player exception to a user-readable message.
+String _friendlyPlaybackError(Object error) {
+  final s = error.toString();
+  final httpCode = RegExp(r'Response code:?\s*(\d{3})').firstMatch(s);
+  if (httpCode != null) {
+    final code = httpCode.group(1)!;
+    if (code == '404') {
+      return 'Episode unavailable (HTTP 404). The publisher may have removed it.';
+    }
+    if (code == '403') return 'Episode unavailable (HTTP 403 — forbidden).';
+    return 'Server error (HTTP $code).';
+  }
+  if (s.contains('SocketException') ||
+      s.contains('Failed host lookup') ||
+      s.contains('Unable to connect') ||
+      s.contains('Network is unreachable')) {
+    return 'Network error — check your connection.';
+  }
+  if (s.contains('UnrecognizedInputFormatException') ||
+      s.contains('Unsupported format')) {
+    return "Couldn't play this episode (unsupported audio format).";
+  }
+  // just_audio's PlayerException for a failed load reads "(0) Source error"
+  // and doesn't expose the underlying HTTP status, so we give a useful
+  // explanation rather than echoing the cryptic message. A dead URL (the
+  // common cause) deserves a plain-language hint.
+  if (s.contains('Source error') || s.contains('PlayerException')) {
+    return 'Episode unavailable — the audio file couldn’t be loaded. '
+        'The publisher may have removed or moved it.';
+  }
+  return "Couldn't play this episode.";
 }

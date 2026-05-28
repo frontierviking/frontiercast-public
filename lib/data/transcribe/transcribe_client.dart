@@ -27,8 +27,9 @@ class TranscribeClient {
     }
   }
 
-  /// Requests a transcript. Long-running: the server downloads and runs Whisper
-  /// synchronously, so allow plenty of time.
+  /// Requests a transcript. The server streams NDJSON progress lines while it
+  /// downloads and runs Whisper, then a final line with the text. [onProgress]
+  /// receives the transcription fraction (0..1) as it advances.
   Future<String> transcribe({
     required String baseUrl,
     required String token,
@@ -37,25 +38,25 @@ class TranscribeClient {
     String? title,
     String? podcast,
     String? language,
+    void Function(String stage, double progress)? onProgress,
   }) async {
-    final http.Response resp;
+    final request = http.Request(
+      'POST',
+      Uri.parse('${_base(baseUrl)}/transcribe'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Content-Type'] = 'application/json';
+    request.body = jsonEncode({
+      'audio_url': audioUrl,
+      'guid': guid,
+      if (title != null && title.isNotEmpty) 'title': title,
+      if (podcast != null && podcast.isNotEmpty) 'podcast': podcast,
+      if (language != null && language.isNotEmpty) 'language': language,
+    });
+
+    final http.StreamedResponse resp;
     try {
-      resp = await _client
-          .post(
-            Uri.parse('${_base(baseUrl)}/transcribe'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'audio_url': audioUrl,
-              'guid': guid,
-              if (title != null && title.isNotEmpty) 'title': title,
-              if (podcast != null && podcast.isNotEmpty) 'podcast': podcast,
-              if (language != null && language.isNotEmpty) 'language': language,
-            }),
-          )
-          .timeout(const Duration(minutes: 30));
+      resp = await _client.send(request).timeout(const Duration(minutes: 3));
     } catch (e) {
       throw TranscribeException('Could not reach the transcription server: $e');
     }
@@ -63,13 +64,44 @@ class TranscribeClient {
       throw TranscribeException('Unauthorized — check the server token.');
     }
     if (resp.statusCode != 200) {
-      throw TranscribeException(
-        'Server error ${resp.statusCode}: ${resp.body}',
-      );
+      final body = await resp.stream.bytesToString();
+      throw TranscribeException('Server error ${resp.statusCode}: $body');
     }
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    final text = (data['text'] as String?)?.trim() ?? '';
-    if (text.isEmpty) {
+
+    String? text;
+    String? error;
+    final lines = resp.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    await for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final Map<String, dynamic> obj;
+      try {
+        obj = jsonDecode(trimmed) as Map<String, dynamic>;
+      } catch (_) {
+        continue; // ignore any non-JSON keepalive noise
+      }
+      if (obj['error'] != null) {
+        error = obj['error'].toString();
+        break;
+      }
+      if (obj['done'] == true) {
+        text = (obj['text'] as String?)?.trim() ?? '';
+        break;
+      }
+      final stage = obj['stage'];
+      if (stage == 'downloading' || stage == 'transcribing') {
+        final p = obj['progress'];
+        onProgress?.call(
+          stage as String,
+          p is num ? p.toDouble().clamp(0.0, 1.0) : 0.0,
+        );
+      }
+    }
+
+    if (error != null) throw TranscribeException(error);
+    if (text == null || text.isEmpty) {
       throw TranscribeException('Empty transcript returned.');
     }
     return text;

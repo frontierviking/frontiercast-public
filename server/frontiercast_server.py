@@ -19,13 +19,55 @@ import hashlib
 import json
 import os
 import pathlib
+import queue as queuelib
 import re
+import sys
 import tempfile
 import threading
+import types
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import mlx_whisper
+
+# --- Progress hook -----------------------------------------------------------
+# mlx_whisper.transcribe drives a tqdm(total=content_frames) bar and calls
+# pbar.update(frames) as it works. We replace that tqdm with a tiny shim that
+# reports the fraction done to a per-request callback, so the phone can show a
+# real progress circle. Only one transcription runs at a time (see the lock),
+# so a single module-level callback is safe.
+_progress_cb = None
+
+
+class _ProgressBar:
+    def __init__(self, *args, total=None, **kwargs):
+        self.total = total or 0
+        self.n = 0
+
+    def update(self, k=1):
+        self.n += k
+        cb = _progress_cb
+        if cb and self.total:
+            try:
+                cb(min(1.0, self.n / self.total))
+            except Exception:  # noqa: BLE001 - never let progress break transcription
+                pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def close(self):
+        pass
+
+
+# Patch the module's tqdm reference (the function `mlx_whisper.transcribe`
+# shadows the submodule attribute, so reach it via sys.modules).
+sys.modules["mlx_whisper.transcribe"].tqdm = types.SimpleNamespace(
+    tqdm=_ProgressBar
+)
 
 TOKEN = os.environ.get(
     "FRONTIERCAST_TOKEN", "change-me"
@@ -75,6 +117,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _begin_stream(self) -> None:
+        """Start a streamed NDJSON response (body ends when the socket closes)."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+    def _write_line(self, obj: dict) -> None:
+        self.wfile.write((json.dumps(obj) + "\n").encode("utf-8"))
+        self.wfile.flush()
+
     def do_GET(self):  # noqa: N802
         if self.path == "/health":
             self._send(200, {"status": "ok", "model": MODEL})
@@ -106,45 +160,89 @@ class Handler(BaseHTTPRequestHandler):
 
         cache_file = _cache_path(title, podcast, guid)
         if cache_file.exists():
-            self._send(200, {"text": cache_file.read_text("utf-8"), "cached": True})
+            self._begin_stream()
+            self._write_line(
+                {"done": True, "text": cache_file.read_text("utf-8"), "cached": True}
+            )
             return
 
-        tmp_path = None
+        # Stream progress as NDJSON. The heavy work runs in a worker thread and
+        # pushes events onto a queue; this thread drains the queue to the socket.
+        self._begin_stream()
+        self._write_line({"stage": "starting"})
+        events: "queuelib.Queue[dict | None]" = queuelib.Queue()
+
+        def run() -> None:
+            global _progress_cb
+            tmp_path = None
+            try:
+                with _transcribe_lock:
+                    fd, tmp_path = tempfile.mkstemp(suffix=".audio")
+                    os.close(fd)
+                    print(f"[transcribe] downloading {audio_url}", flush=True)
+                    with httpx.stream(
+                        "GET",
+                        audio_url,
+                        follow_redirects=True,
+                        timeout=httpx.Timeout(120.0, read=600.0),
+                        headers={"User-Agent": "FrontierCast/1.0"},
+                    ) as resp:
+                        resp.raise_for_status()
+                        total = int(resp.headers.get("content-length") or 0)
+                        got = 0
+                        marker = 0
+                        with open(tmp_path, "wb") as out:
+                            events.put({"stage": "downloading", "progress": 0.0})
+                            for chunk in resp.iter_bytes(1 << 16):
+                                out.write(chunk)
+                                got += len(chunk)
+                                # Heartbeat every ~4 MB so the socket stays alive.
+                                if got - marker >= (4 << 20):
+                                    marker = got
+                                    events.put(
+                                        {
+                                            "stage": "downloading",
+                                            "progress": (got / total) if total else None,
+                                        }
+                                    )
+                    kwargs = {"path_or_hf_repo": MODEL}
+                    if language:
+                        kwargs["language"] = language
+                    print(f"[transcribe] running whisper (guid={guid})", flush=True)
+                    _progress_cb = lambda p: events.put(  # noqa: E731
+                        {"stage": "transcribing", "progress": p}
+                    )
+                    result = mlx_whisper.transcribe(tmp_path, **kwargs)
+                    _progress_cb = None
+                    text = (result.get("text") or "").strip()
+                    cache_file.write_text(text, encoding="utf-8")
+                print(f"[transcribe] done ({len(text)} chars)", flush=True)
+                events.put({"done": True, "text": text, "cached": False})
+            except httpx.HTTPError as exc:
+                events.put({"error": f"download failed: {exc}"})
+            except Exception as exc:  # noqa: BLE001
+                events.put({"error": str(exc)})
+            finally:
+                _progress_cb = None
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+                events.put(None)
+
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
         try:
-            with _transcribe_lock:
-                fd, tmp_path = tempfile.mkstemp(suffix=".audio")
-                os.close(fd)
-                print(f"[transcribe] downloading {audio_url}", flush=True)
-                with httpx.stream(
-                    "GET",
-                    audio_url,
-                    follow_redirects=True,
-                    timeout=httpx.Timeout(120.0, read=600.0),
-                    headers={"User-Agent": "FrontierCast/1.0"},
-                ) as resp:
-                    resp.raise_for_status()
-                    with open(tmp_path, "wb") as out:
-                        for chunk in resp.iter_bytes(65536):
-                            out.write(chunk)
-                kwargs = {"path_or_hf_repo": MODEL}
-                if language:
-                    kwargs["language"] = language
-                print(f"[transcribe] running whisper (guid={guid})", flush=True)
-                result = mlx_whisper.transcribe(tmp_path, **kwargs)
-                text = (result.get("text") or "").strip()
-                cache_file.write_text(text, encoding="utf-8")
-            print(f"[transcribe] done ({len(text)} chars)", flush=True)
-            self._send(200, {"text": text, "cached": False})
-        except httpx.HTTPError as exc:
-            self._send(502, {"error": f"download failed: {exc}"})
-        except Exception as exc:  # noqa: BLE001
-            self._send(500, {"error": str(exc)})
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
+            while True:
+                item = events.get()
+                if item is None:
+                    break
+                self._write_line(item)
+        except (BrokenPipeError, ConnectionResetError):
+            # Phone went away; the worker still finishes and caches the result.
+            pass
+        worker.join()
 
     def log_message(self, *args):  # silence default logging
         pass

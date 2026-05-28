@@ -99,9 +99,11 @@ final transcribeClientProvider = Provider<TranscribeClient>(
   (ref) => TranscribeClient(),
 );
 
-/// Episodes currently being transcribed (by id).
+/// Episodes currently being transcribed: id -> live status (stage + progress).
 final transcribeControllerProvider =
-    NotifierProvider<TranscribeController, Set<int>>(TranscribeController.new);
+    NotifierProvider<TranscribeController, Map<int, TranscribeStatus>>(
+      TranscribeController.new,
+    );
 
 final transcribeSettingsProvider =
     AsyncNotifierProvider<TranscribeSettingsController, TranscribeSettings>(

@@ -7,6 +7,7 @@ import 'features/player/mini_player.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'providers.dart';
+import 'services/playback_controller.dart';
 import 'theme.dart';
 
 class FrontierCastApp extends StatelessWidget {
@@ -115,6 +116,27 @@ class _HomeShellState extends ConsumerState<HomeShell>
 
   @override
   Widget build(BuildContext context) {
+    // Surface playback errors (e.g. dead audio URLs) as a one-shot snackbar.
+    ref.listen<PlaybackState>(playbackControllerProvider, (prev, next) {
+      final err = next.lastError;
+      if (err == null || err == prev?.lastError) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      messenger.hideCurrentSnackBar();
+      // Stay on screen until the user dismisses it (or navigates somewhere
+      // that hides snackbars). Far longer than any reasonable read time.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(err.message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(days: 1),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: messenger.hideCurrentSnackBar,
+          ),
+        ),
+      );
+    });
     return Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: Column(
@@ -123,7 +145,10 @@ class _HomeShellState extends ConsumerState<HomeShell>
           const MiniPlayer(),
           NavigationBar(
             selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
+            onDestinationSelected: (i) {
+              ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+              setState(() => _index = i);
+            },
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.library_music_outlined),
