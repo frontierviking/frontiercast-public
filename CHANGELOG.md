@@ -7,6 +7,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-29
+
+### Added
+- Swipe a downloaded episode left in the Downloads tab to remove it and free
+  up space. A snackbar with "Undo" appears (Undo re-downloads the episode).
+  The existing tap-on-the-green-check shortcut still works.
+
 ## [1.5.0] - 2026-05-28
 
 ### Added

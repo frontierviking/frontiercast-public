@@ -212,26 +212,60 @@ class _DownloadedRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      leading: _Artwork(url: podcast.imageUrl),
-      title: Text(episode.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        [
-          podcast.title,
-          formatBytes(episode.sizeBytes),
-        ].where((s) => s.isNotEmpty).join('  ·  '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final downloads = ref.read(downloadControllerProvider.notifier);
+    return Dismissible(
+      key: ValueKey('downloaded-${episode.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: Colors.red.shade700,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
-      onTap: () {
-        Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute(builder: (_) => const NowPlayingScreen()));
-        ref
-            .read(playbackControllerProvider.notifier)
-            .playEpisode(episode, podcast)
-            .catchError((_) {});
+      onDismissed: (_) async {
+        await downloads.delete(episode);
+        if (!context.mounted) return;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('Removed "${episode.title}"'),
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Undo',
+                onPressed: () => downloads.download(episode),
+              ),
+            ),
+          );
       },
-      trailing: DownloadButton(episode: episode),
+      child: ListTile(
+        leading: _Artwork(url: podcast.imageUrl),
+        title: Text(
+          episode.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          [
+            podcast.title,
+            formatBytes(episode.sizeBytes),
+          ].where((s) => s.isNotEmpty).join('  ·  '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: () {
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).push(MaterialPageRoute(builder: (_) => const NowPlayingScreen()));
+          ref
+              .read(playbackControllerProvider.notifier)
+              .playEpisode(episode, podcast)
+              .catchError((_) {});
+        },
+        trailing: DownloadButton(episode: episode),
+      ),
     );
   }
 }
