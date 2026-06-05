@@ -8,6 +8,12 @@ import 'services/audio_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Generous image cache so library thumbnails stay decoded in memory across
+  // navigations — Now Playing's full-res artwork would otherwise evict them
+  // and cause a brief reload flicker when returning to Library.
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 500
+    ..maximumSizeBytes = 256 << 20; // 256 MB
   final handler = await AudioService.init(
     builder: PodcastAudioHandler.new,
     config: const AudioServiceConfig(

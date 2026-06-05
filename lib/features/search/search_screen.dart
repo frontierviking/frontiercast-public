@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/feed/feed_parser.dart';
 import '../../data/search/podcast_search.dart';
 import '../../providers.dart';
+import '../podcast_detail/podcast_detail_screen.dart';
 
 /// True when the text is an absolute http(s) URL — treated as a feed address
 /// to subscribe to directly, covering podcasts not in the iTunes catalog.
@@ -119,6 +120,19 @@ class _FeedUrlResultState extends ConsumerState<_FeedUrlResult> {
     }
   }
 
+  Future<void> _openSubscribed() async {
+    final podcast = await ref
+        .read(databaseProvider)
+        .podcastDao
+        .getByFeedUrl(widget.url);
+    if (podcast == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PodcastDetailScreen(podcastId: podcast.id),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final subscribed = ref
@@ -173,6 +187,7 @@ class _FeedUrlResultState extends ConsumerState<_FeedUrlResult> {
         return ListView(
           children: [
             ListTile(
+              onTap: subscribed ? _openSubscribed : null,
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
@@ -281,10 +296,26 @@ class _ResultTileState extends ConsumerState<_ResultTile> {
     }
   }
 
+  Future<void> _openSubscribed(String feedUrl) async {
+    final podcast = await ref
+        .read(databaseProvider)
+        .podcastDao
+        .getByFeedUrl(feedUrl);
+    if (podcast == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PodcastDetailScreen(podcastId: podcast.id),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final art = widget.podcast.artworkUrl;
     return ListTile(
+      onTap: widget.isSubscribed
+          ? () => _openSubscribed(widget.podcast.feedUrl)
+          : null,
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(

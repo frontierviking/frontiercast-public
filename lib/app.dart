@@ -137,7 +137,16 @@ class _HomeShellState extends ConsumerState<HomeShell>
         ),
       );
     });
-    return Scaffold(
+    return PopScope(
+      // Allow the system back to actually pop (i.e. exit the app) only when
+      // already on the Library tab. From any other tab, back returns to Library
+      // first — matches the standard Android bottom-nav pattern.
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_index != 0) setState(() => _index = 0);
+      },
+      child: Scaffold(
       body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -169,6 +178,7 @@ class _HomeShellState extends ConsumerState<HomeShell>
             ],
           ),
         ],
+      ),
       ),
     );
   }

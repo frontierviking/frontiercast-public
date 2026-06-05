@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../util/format.dart';
-import '../player/now_playing_screen.dart';
+import '../podcast_detail/episode_detail_sheet.dart';
 import 'download_button.dart';
 
 class DownloadsScreen extends ConsumerWidget {
@@ -254,16 +254,11 @@ class _DownloadedRow extends ConsumerWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        onTap: () {
-          Navigator.of(
-            context,
-            rootNavigator: true,
-          ).push(MaterialPageRoute(builder: (_) => const NowPlayingScreen()));
-          ref
-              .read(playbackControllerProvider.notifier)
-              .playEpisode(episode, podcast)
-              .catchError((_) {});
-        },
+        onTap: () => showEpisodeDetailSheet(
+          context,
+          episode: episode,
+          podcast: podcast,
+        ),
         trailing: DownloadButton(episode: episode),
       ),
     );

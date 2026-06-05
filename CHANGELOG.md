@@ -7,6 +7,31 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-05-29
+
+### Fixed
+- Returning to the Library from a podcast no longer flashes a brief reload of
+  the cover thumbnails. The in-memory image cache is now large enough
+  (256 MB / 500 entries) to keep all library thumbnails decoded even after
+  Now Playing's full-res artwork passes through.
+
+## [1.6.2] - 2026-05-29
+
+### Changed
+- Tapping a downloaded episode in the Downloads tab now opens the episode
+  detail sheet (where you choose to play) instead of starting playback and
+  jumping straight into Now Playing.
+- The Android system back button now returns to the Library tab from any other
+  tab before exiting the app, so back from Search/Downloads/Settings no longer
+  drops you out unexpectedly.
+
+## [1.6.1] - 2026-05-29
+
+### Changed
+- Tapping an already-subscribed search result (or feed-URL preview) now opens
+  the podcast's episode list directly, instead of being a no-op. The + button
+  still subscribes new ones.
+
 ## [1.6.0] - 2026-05-29
 
 ### Added
