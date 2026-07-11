@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database.dart';
 import '../../providers.dart';
+import '../../services/transcribe_controller.dart';
+import '../../theme.dart';
 import '../../util/format.dart';
 import '../podcast_detail/episode_detail_sheet.dart';
 import 'download_button.dart';
@@ -16,6 +18,7 @@ class DownloadsScreen extends ConsumerWidget {
     final downloadingAsync = ref.watch(downloadingProvider);
     final downloadedAsync = ref.watch(downloadedProvider);
     final progressMap = ref.watch(downloadControllerProvider);
+    final transcribing = ref.watch(transcribeControllerProvider).values.toList();
 
     final downloading = downloadingAsync.value ?? const [];
     final downloaded = downloadedAsync.value ?? const [];
@@ -31,7 +34,9 @@ class DownloadsScreen extends ConsumerWidget {
               downloaded.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (downloading.isEmpty && downloaded.isEmpty) {
+          if (downloading.isEmpty &&
+              downloaded.isEmpty &&
+              transcribing.isEmpty) {
             return _EmptyDownloads(theme: theme);
           }
 
@@ -43,6 +48,18 @@ class DownloadsScreen extends ConsumerWidget {
 
           return CustomScrollView(
             slivers: [
+              if (transcribing.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: _SectionHeader(
+                    'Transcribing (${transcribing.length})',
+                  ),
+                ),
+                SliverList.separated(
+                  itemCount: transcribing.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) => _TranscribingRow(job: transcribing[i]),
+                ),
+              ],
               if (downloading.isNotEmpty) ...[
                 SliverToBoxAdapter(
                   child: _SectionHeader('Downloading (${downloading.length})'),
@@ -126,6 +143,85 @@ class _Artwork extends StatelessWidget {
                 errorWidget: (_, _, _) => const Icon(Icons.podcasts),
               )
             : const Icon(Icons.podcasts),
+      ),
+    );
+  }
+}
+
+class _TranscribingRow extends ConsumerWidget {
+  final TranscribeJob job;
+  const _TranscribingRow({required this.job});
+
+  ({String label, double? value}) _status() => switch (job.stage) {
+    'queued' => (label: 'Queued', value: 0),
+    'downloading' => (
+      label: job.progress > 0
+          ? 'Downloading ${(job.progress * 100).round()}%'
+          : 'Downloading…',
+      value: job.progress > 0 ? job.progress : null,
+    ),
+    'transcribing' => (
+      label: 'Transcribing ${(job.progress * 100).round()}%',
+      value: job.progress > 0 ? job.progress : null,
+    ),
+    'waiting' => (label: 'Finishing on Mac…', value: null),
+    _ => (label: 'Starting…', value: null),
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final s = _status();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      child: Row(
+        children: [
+          _Artwork(url: job.podcast?.imageUrl ?? job.episode.imageUrl),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  job.episode.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.article_outlined, size: 13, color: kAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      s.label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: kAccent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: s.value,
+                    minHeight: 5,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: job.isQueued ? 'Remove from queue' : 'Cancel',
+            icon: const Icon(Icons.close),
+            onPressed: () => ref
+                .read(transcribeControllerProvider.notifier)
+                .cancel(job.episode.id),
+          ),
+        ],
       ),
     );
   }

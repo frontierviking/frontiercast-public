@@ -99,9 +99,11 @@ final transcribeClientProvider = Provider<TranscribeClient>(
   (ref) => TranscribeClient(),
 );
 
-/// Episodes currently being transcribed: id -> live status (stage + progress).
+/// Transcription queue: episode id -> job (episode, podcast, stage, progress).
+/// Insertion-ordered, so its values are the queue order (first non-queued
+/// entry is the one currently running).
 final transcribeControllerProvider =
-    NotifierProvider<TranscribeController, Map<int, TranscribeStatus>>(
+    NotifierProvider<TranscribeController, Map<int, TranscribeJob>>(
       TranscribeController.new,
     );
 
@@ -114,6 +116,12 @@ final transcribeSettingsProvider =
 final transcriptProvider = StreamProvider.family<Transcript?, int>(
   (ref, episodeId) =>
       ref.watch(databaseProvider).transcriptDao.watchByEpisode(episodeId),
+);
+
+/// The set of episode ids that have a stored transcript. Used by episode lists
+/// to show a per-row "has transcript" badge without one stream per tile.
+final transcribedEpisodeIdsProvider = StreamProvider<Set<int>>(
+  (ref) => ref.watch(databaseProvider).transcriptDao.watchAllEpisodeIds(),
 );
 
 /// The up-next queue (joined with podcast), in order.

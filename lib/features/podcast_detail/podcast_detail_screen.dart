@@ -322,6 +322,9 @@ class _EpisodeTile extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isCurrent =
         ref.watch(playbackControllerProvider).episode?.id == episode.id;
+    final hasTranscript =
+        ref.watch(transcribedEpisodeIdsProvider).value?.contains(episode.id) ??
+        false;
 
     final remainingMs = (episode.durationMs != null && episode.positionMs > 0)
         ? episode.durationMs! - episode.positionMs
@@ -392,6 +395,37 @@ class _EpisodeTile extends ConsumerWidget {
                           meta,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      if (hasTranscript) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kAccent.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.article,
+                                size: 13,
+                                color: kAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Transcript',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: kAccent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

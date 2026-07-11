@@ -9,6 +9,16 @@ class TranscribeException implements Exception {
   String toString() => message;
 }
 
+/// The streaming connection ended (or dropped) before a final transcript
+/// arrived. The server keeps working and caches the result, so the caller
+/// should poll [TranscribeClient.pollTranscript] rather than treat this as a
+/// hard failure.
+class TranscribeInterrupted implements Exception {
+  const TranscribeInterrupted();
+  @override
+  String toString() => 'Transcription connection interrupted';
+}
+
 /// Client for the Mac transcription server (reached over Tailscale/LAN).
 class TranscribeClient {
   final http.Client _client;
@@ -40,13 +50,8 @@ class TranscribeClient {
     String? language,
     void Function(String stage, double progress)? onProgress,
   }) async {
-    final request = http.Request(
-      'POST',
-      Uri.parse('${_base(baseUrl)}/transcribe'),
-    );
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['Content-Type'] = 'application/json';
-    request.body = jsonEncode({
+    final uri = Uri.parse('${_base(baseUrl)}/transcribe');
+    final body = jsonEncode({
       'audio_url': audioUrl,
       'guid': guid,
       if (title != null && title.isNotEmpty) 'title': title,
@@ -54,11 +59,29 @@ class TranscribeClient {
       if (language != null && language.isNotEmpty) 'language': language,
     });
 
-    final http.StreamedResponse resp;
-    try {
-      resp = await _client.send(request).timeout(const Duration(minutes: 3));
-    } catch (e) {
-      throw TranscribeException('Could not reach the transcription server: $e');
+    // Retry the initial connection a few times with backoff so a brief network
+    // drop (e.g. Tailscale re-routing) doesn't fail the whole job. A fresh
+    // Request is needed each attempt — a sent one can't be re-finalized.
+    http.StreamedResponse? resp;
+    Object? lastError;
+    for (var attempt = 0; attempt < 3 && resp == null; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(Duration(seconds: 2 * attempt));
+      }
+      final request = http.Request('POST', uri)
+        ..headers['Authorization'] = 'Bearer $token'
+        ..headers['Content-Type'] = 'application/json'
+        ..body = body;
+      try {
+        resp = await _client.send(request).timeout(const Duration(minutes: 3));
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (resp == null) {
+      throw TranscribeException(
+        'Could not reach the transcription server: $lastError',
+      );
     }
     if (resp.statusCode == 401) {
       throw TranscribeException('Unauthorized — check the server token.');
@@ -101,9 +124,39 @@ class TranscribeClient {
     }
 
     if (error != null) throw TranscribeException(error);
-    if (text == null || text.isEmpty) {
-      throw TranscribeException('Empty transcript returned.');
-    }
+    // The stream ended without a `done` line — the connection dropped mid-run
+    // (common on mobile for long episodes). The server keeps going and caches
+    // the result, so signal the caller to poll rather than fail outright.
+    if (text == null) throw const TranscribeInterrupted();
+    if (text.isEmpty) throw TranscribeException('Empty transcript returned.');
     return text;
+  }
+
+  /// Polls for a completed transcript without starting a new run. Returns the
+  /// transcript text if the server has it cached, or null if not ready yet.
+  Future<String?> pollTranscript({
+    required String baseUrl,
+    required String token,
+    required String guid,
+    String? title,
+    String? podcast,
+  }) async {
+    final uri = Uri.parse('${_base(baseUrl)}/transcript').replace(
+      queryParameters: {
+        'guid': guid,
+        if (title != null && title.isNotEmpty) 'title': title,
+        if (podcast != null && podcast.isNotEmpty) 'podcast': podcast,
+      },
+    );
+    final resp = await _client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) return null;
+    final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    if (data['ready'] == true) {
+      final text = (data['text'] as String?)?.trim() ?? '';
+      return text.isEmpty ? null : text;
+    }
+    return null;
   }
 }

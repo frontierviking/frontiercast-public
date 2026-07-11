@@ -5,11 +5,13 @@ import '../../data/db/database.dart';
 import '../../providers.dart';
 import '../../services/transcribe_controller.dart';
 
-String _statusLabel(TranscribeStatus s) {
+String _statusLabel(TranscribeJob s) {
   final pct = (s.progress * 100).round();
   return switch (s.stage) {
+    'queued' => 'Queued…',
     'downloading' => s.progress > 0 ? 'Downloading… $pct%' : 'Downloading…',
     'transcribing' => 'Transcribing… $pct%',
+    'waiting' => 'Finishing on your Mac… (reconnected)',
     _ => 'Transcribing on your Mac…',
   };
 }

@@ -7,6 +7,51 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-11
+
+### Fixed
+- A brief network drop (e.g. Tailscale re-routing) no longer fails a
+  transcription outright with "could not reach the transcription server." The
+  app now retries the initial connection up to 3 times with backoff before
+  giving up. (Mid-run drops were already handled by the poll-to-recover path.)
+
+## [1.9.0] - 2026-07-11
+
+### Added
+- Transcription queue. Kicking off several transcriptions at once now enqueues
+  them and processes one at a time (the Mac transcribes one episode at a time),
+  instead of firing simultaneous connections that could pile up and wedge the
+  server. Each job shows its status: Queued → Downloading % → Transcribing %.
+- The Downloads tab has a "Transcribing" section listing the queue with live
+  status and a per-job cancel/remove button.
+
+## [1.8.0] - 2026-07-09
+
+### Fixed
+- Long transcriptions no longer fail with "empty transcript returned" when the
+  phone's connection drops mid-run (common for multi-hour episodes). The server
+  keeps working and caches the result even after a disconnect; the app now
+  detects the interruption and polls a new `/transcript` endpoint until the
+  result is ready, keeping the progress indicator visible the whole time
+  ("Finishing on your Mac… (reconnected)").
+- The server rechecks its cache after acquiring the transcription lock, so a
+  retry that raced an in-flight run returns the just-finished result instead of
+  redoing the whole (expensive) transcription.
+
+### Changed
+- **The transcription server must be restarted** to pick up the new
+  `/transcript` poll endpoint and the post-lock cache recheck. (If you run it
+  via the launchd agent: `launchctl kickstart -k gui/$(id -u)/com.frontiercast.transcribe`.)
+
+## [1.7.0] - 2026-06-06
+
+### Added
+- Episodes with a stored transcript now show a coloured **Transcript** pill
+  badge in the episode list, so you can scan a podcast and spot the
+  transcribed episodes at a glance instead of opening Now Playing to check
+  the icon. Backed by a single stream of transcribed episode ids so the
+  per-tile cost stays trivial.
+
 ## [1.6.3] - 2026-05-29
 
 ### Fixed

@@ -276,6 +276,11 @@ class TranscriptDao extends DatabaseAccessor<AppDatabase>
     transcripts,
   )..where((t) => t.episodeId.equals(episodeId))).getSingleOrNull();
 
+  /// One stream of every transcribed episode id, so any episode list can show
+  /// a per-row "has transcript" badge without spinning up a stream per tile.
+  Stream<Set<int>> watchAllEpisodeIds() =>
+      select(transcripts).watch().map((rows) => rows.map((t) => t.episodeId).toSet());
+
   Future<void> upsert(int episodeId, String text, String? language) =>
       into(transcripts).insertOnConflictUpdate(
         TranscriptsCompanion(

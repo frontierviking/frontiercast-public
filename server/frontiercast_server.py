@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import types
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
@@ -130,10 +131,37 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
     def do_GET(self):  # noqa: N802
-        if self.path == "/health":
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/health":
             self._send(200, {"status": "ok", "model": MODEL})
-        else:
-            self._send(404, {"error": "not found"})
+            return
+        if parsed.path == "/transcript":
+            # Poll endpoint: return a cached transcript if it exists, else 204.
+            # Lets the phone recover after a dropped streaming connection —
+            # the server finishes and caches even if the phone went away.
+            if self.headers.get("Authorization", "") != f"Bearer {TOKEN}":
+                self._send(401, {"error": "unauthorized"})
+                return
+            q = urllib.parse.parse_qs(parsed.query)
+            guid = (q.get("guid") or [""])[0]
+            title = (q.get("title") or [None])[0]
+            podcast = (q.get("podcast") or [None])[0]
+            if not guid:
+                self._send(400, {"error": "guid required"})
+                return
+            cache_file = _cache_path(title, podcast, guid)
+            if cache_file.exists():
+                self._send(
+                    200,
+                    {
+                        "ready": True,
+                        "text": cache_file.read_text("utf-8"),
+                    },
+                )
+            else:
+                self._send(200, {"ready": False})
+            return
+        self._send(404, {"error": "not found"})
 
     def do_POST(self):  # noqa: N802
         if self.path != "/transcribe":
@@ -177,6 +205,23 @@ class Handler(BaseHTTPRequestHandler):
             tmp_path = None
             try:
                 with _transcribe_lock:
+                    # Recheck the cache now that we hold the lock. If a request
+                    # for the same episode was already in flight when we passed
+                    # the initial check and has since finished, use its result
+                    # instead of redoing the whole transcription.
+                    if cache_file.exists():
+                        print(
+                            f"[transcribe] cache hit (post-lock) for {guid}",
+                            flush=True,
+                        )
+                        events.put(
+                            {
+                                "done": True,
+                                "text": cache_file.read_text("utf-8"),
+                                "cached": True,
+                            }
+                        )
+                        return
                     fd, tmp_path = tempfile.mkstemp(suffix=".audio")
                     os.close(fd)
                     print(f"[transcribe] downloading {audio_url}", flush=True)
