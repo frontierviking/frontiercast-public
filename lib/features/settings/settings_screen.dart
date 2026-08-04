@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/podcast_repository.dart';
+import '../../data/transcribe/transcribe_settings.dart';
 import '../../providers.dart';
 import '../player/skip_seconds_dialog.dart';
 
@@ -136,14 +137,59 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
           const _SectionHeader('Transcription (Whisper)'),
           ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: const Text('Server URL'),
+            leading: const Icon(Icons.alt_route),
+            title: const Text('Connection'),
+            subtitle: Text(settings?.route.label ?? '…'),
+            onTap: settings == null
+                ? null
+                : () async {
+                    final picked = await showDialog<TranscribeRoute>(
+                      context: context,
+                      builder: (ctx) => SimpleDialog(
+                        title: const Text('Reach the Mac via'),
+                        children: [
+                          for (final r in TranscribeRoute.values)
+                            RadioListTile<TranscribeRoute>(
+                              value: r,
+                              groupValue: settings.route,
+                              title: Text(r.label),
+                              onChanged: (v) => Navigator.of(ctx).pop(v),
+                            ),
+                        ],
+                      ),
+                    );
+                    if (picked != null) {
+                      await ref
+                          .read(transcribeSettingsProvider.notifier)
+                          .setRoute(picked);
+                    }
+                  },
+          ),
+          ListTile(
+            leading: const Icon(Icons.wifi),
+            title: const Text('Wi-Fi / LAN URL'),
+            subtitle: Text(settings?.lanUrl ?? '…'),
+            onTap: settings == null
+                ? null
+                : () => _editText(
+                    context,
+                    title: 'Wi-Fi / LAN server URL',
+                    hint: 'http://192.168.x.x:8765',
+                    initial: settings.lanUrl,
+                    onSave: (v) => ref
+                        .read(transcribeSettingsProvider.notifier)
+                        .setLanUrl(v),
+                  ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.vpn_lock),
+            title: const Text('Tailscale URL'),
             subtitle: Text(settings?.url ?? '…'),
             onTap: settings == null
                 ? null
                 : () => _editText(
                     context,
-                    title: 'Transcription server URL',
+                    title: 'Tailscale server URL',
                     hint: 'http://100.x.x.x:8765',
                     initial: settings.url,
                     onSave: (v) =>
@@ -265,16 +311,30 @@ class SettingsScreen extends ConsumerWidget {
     if (picked != null) await onPick(picked);
   }
 
+  /// Tests both routes independently so it's obvious which one is down
+  /// (e.g. Tailscale off at home while Wi-Fi still works).
   Future<void> _testConnection(BuildContext context, WidgetRef ref) async {
     final settings = ref.read(transcribeSettingsProvider).value;
     if (settings == null) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(const SnackBar(content: Text('Checking server…')));
-    final ok = await ref.read(transcribeClientProvider).health(settings.url);
+    final client = ref.read(transcribeClientProvider);
+    final lanOk = settings.lanUrl.trim().isEmpty
+        ? null
+        : await client.health(settings.lanUrl);
+    final tsOk = settings.url.trim().isEmpty
+        ? null
+        : await client.health(settings.url);
+    String mark(bool? ok) => ok == null
+        ? 'not set'
+        : ok
+        ? 'reachable ✓'
+        : 'unreachable ✗';
     messenger.showSnackBar(
       SnackBar(
+        duration: const Duration(seconds: 6),
         content: Text(
-          ok ? 'Server reachable ✓' : 'Could not reach ${settings.url}',
+          'Wi-Fi / LAN: ${mark(lanOk)}\nTailscale: ${mark(tsOk)}',
         ),
       ),
     );

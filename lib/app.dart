@@ -137,6 +137,28 @@ class _HomeShellState extends ConsumerState<HomeShell>
         ),
       );
     });
+    // Surface transcription failures (e.g. Tailscale down) — the job runs in a
+    // queue outside any one screen, so report it app-wide.
+    ref.listen<({String message, DateTime at})?>(transcribeErrorProvider, (
+      prev,
+      next,
+    ) {
+      if (next == null || next == prev) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(next.message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(days: 1),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: messenger.hideCurrentSnackBar,
+          ),
+        ),
+      );
+    });
     return PopScope(
       // Allow the system back to actually pop (i.e. exit the app) only when
       // already on the Library tab. From any other tab, back returns to Library

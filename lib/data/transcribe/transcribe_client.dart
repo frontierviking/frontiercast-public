@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -26,15 +27,59 @@ class TranscribeClient {
 
   String _base(String baseUrl) => baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
 
-  Future<bool> health(String baseUrl) async {
+  Future<bool> health(String baseUrl, {Duration? timeout}) async {
     try {
       final resp = await _client
           .get(Uri.parse('${_base(baseUrl)}/health'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(timeout ?? const Duration(seconds: 8));
       return resp.statusCode == 200;
     } catch (_) {
       return false;
     }
+  }
+
+  /// Scans the phone's own /24 for a host answering /health on [port].
+  ///
+  /// Home routers hand out new addresses whenever they re-lease, which silently
+  /// breaks a hardcoded LAN IP; Android also won't resolve the Mac's `.local`
+  /// mDNS name. Sweeping the subnet finds the Mac wherever it landed. Returns
+  /// the base URL (e.g. `http://192.168.1.22:8765`) or null if nothing answers.
+  Future<String?> discoverOnLan({int port = 8765}) async {
+    final prefixes = <String>{};
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final parts = addr.address.split('.');
+          if (parts.length == 4 && !addr.isLoopback) {
+            prefixes.add('${parts[0]}.${parts[1]}.${parts[2]}');
+          }
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+
+    for (final prefix in prefixes) {
+      // Probe the whole subnet concurrently with a short timeout; the first
+      // host that answers /health is the server.
+      final probes = <Future<String?>>[];
+      for (var host = 1; host < 255; host++) {
+        final url = 'http://$prefix.$host:$port';
+        probes.add(
+          health(url, timeout: const Duration(milliseconds: 900))
+              .then((ok) => ok ? url : null)
+              .catchError((_) => null),
+        );
+      }
+      final results = await Future.wait(probes);
+      final found = results.firstWhere((r) => r != null, orElse: () => null);
+      if (found != null) return found;
+    }
+    return null;
   }
 
   /// Requests a transcript. The server streams NDJSON progress lines while it

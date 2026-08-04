@@ -2,8 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database.dart';
+import '../../data/transcribe/transcribe_settings.dart';
 import '../../providers.dart';
 import '../../services/transcribe_controller.dart';
+
+/// Small pill showing which address transcription is using.
+class _RouteChip extends StatelessWidget {
+  final String label;
+  const _RouteChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lan = label.contains('LAN') || label.contains('Wi-Fi');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            lan ? Icons.wifi : Icons.vpn_lock,
+            size: 13,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 String _statusLabel(TranscribeJob s) {
   final pct = (s.progress * 100).round();
@@ -26,16 +63,41 @@ class TranscriptScreen extends ConsumerStatefulWidget {
 }
 
 class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
-  String? _error;
-
   Future<void> _transcribe() async {
-    setState(() => _error = null);
-    try {
-      await ref
-          .read(transcribeControllerProvider.notifier)
-          .transcribe(widget.episode, widget.podcast);
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+    ref.read(transcribeErrorProvider.notifier).state = null;
+    await ref
+        .read(transcribeControllerProvider.notifier)
+        .transcribe(widget.episode, widget.podcast);
+  }
+
+  Future<void> _chooseRoute(
+    BuildContext context,
+    TranscribeSettings settings,
+  ) async {
+    final picked = await showDialog<TranscribeRoute>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Reach the Mac via'),
+        children: [
+          for (final r in TranscribeRoute.values)
+            RadioListTile<TranscribeRoute>(
+              value: r,
+              groupValue: settings.route,
+              title: Text(r.label),
+              subtitle: Text(switch (r) {
+                TranscribeRoute.auto =>
+                  'Fastest at home, still works away from it',
+                TranscribeRoute.lan => settings.lanUrl,
+                TranscribeRoute.tailscale => settings.url,
+              }, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onChanged: (v) => Navigator.of(ctx).pop(v),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) {
+      await ref.read(transcribeSettingsProvider.notifier).setRoute(picked);
+      ref.read(transcribeRouteInUseProvider.notifier).state = null;
     }
   }
 
@@ -45,6 +107,11 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
     final transcript = ref.watch(transcriptProvider(widget.episode.id)).value;
     final status = ref.watch(transcribeControllerProvider)[widget.episode.id];
     final busy = status != null;
+    // Failures are reported by the queue controller (the job runs outside this
+    // screen's lifetime), so read them from the shared provider.
+    final error = ref.watch(transcribeErrorProvider)?.message;
+    final routeInUse = ref.watch(transcribeRouteInUseProvider);
+    final settings = ref.watch(transcribeSettingsProvider).value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transcript')),
@@ -98,6 +165,10 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyMedium,
                           ),
+                          if (routeInUse != null) ...[
+                            const SizedBox(height: 12),
+                            _RouteChip(label: 'Connected via $routeInUse'),
+                          ],
                         ],
                       )
                     : Column(
@@ -122,10 +193,22 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                             icon: const Icon(Icons.graphic_eq),
                             label: const Text('Transcribe'),
                           ),
-                          if (_error != null) ...[
+                          if (settings != null) ...[
+                            const SizedBox(height: 14),
+                            _RouteChip(
+                              label: routeInUse != null
+                                  ? 'Last connected via $routeInUse'
+                                  : 'Route: ${settings.route.label}',
+                            ),
+                            TextButton(
+                              onPressed: () => _chooseRoute(context, settings),
+                              child: const Text('Change connection'),
+                            ),
+                          ],
+                          if (error != null) ...[
                             const SizedBox(height: 16),
                             Text(
-                              _error!,
+                              error,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.error,

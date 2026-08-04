@@ -7,6 +7,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-08-04
+
+### Added
+- LAN auto-discovery for the transcription server. If no configured address
+  answers, the app sweeps its own /24 subnet for the Mac and remembers where it
+  found it. Home routers hand out a new IP whenever they re-lease (which
+  silently broke the previously hardcoded address), and Android won't resolve
+  the Mac's `.local` mDNS name, so discovery is the only route that self-heals.
+
+### Fixed
+- A failed transcription no longer vanishes silently: the queue surfaces a
+  specific error (e.g. Tailscale down vs. nothing reachable on either route)
+  instead of dropping the job without a word.
+
+## [1.10.0] - 2026-07-27
+
+### Added
+- Transcription can now reach the Mac over **Wi-Fi/LAN as well as Tailscale**.
+  The default "Auto" mode tries the LAN address first and falls back to
+  Tailscale, so a dropped tailnet at home no longer blocks transcription.
+  Settings → Transcription has separate Wi-Fi/LAN and Tailscale URLs plus a
+  Connection selector (Auto / LAN only / Tailscale only).
+- The transcript view shows which route is in use ("Connected via Wi-Fi / LAN")
+  and has a "Change connection" shortcut.
+- "Test connection" now probes both routes and reports each one separately, so
+  it's obvious which is down.
+
+### Fixed
+- Transcription failures are no longer silent. A failed job now raises a clear
+  message naming the cause — e.g. "Can't reach your Mac over Tailscale —
+  Tailscale looks down. Reconnect it on your phone, or switch to Wi-Fi/LAN in
+  Settings." (The queue added in 1.9.0 had been swallowing these.)
+
 ## [1.9.1] - 2026-07-11
 
 ### Fixed

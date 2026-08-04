@@ -99,6 +99,29 @@ final transcribeClientProvider = Provider<TranscribeClient>(
   (ref) => TranscribeClient(),
 );
 
+/// Simple mutable holder (Riverpod 3 dropped StateProvider).
+class _Holder<T> extends Notifier<T> {
+  final T _initial;
+  _Holder(this._initial);
+  @override
+  T build() => _initial;
+  @override
+  set state(T value) => super.state = value;
+}
+
+/// Last transcription failure, surfaced as a one-shot snackbar. The timestamp
+/// makes each error distinct so a listener can detect new ones.
+final transcribeErrorProvider =
+    NotifierProvider<_Holder<({String message, DateTime at})?>,
+        ({String message, DateTime at})?>(
+      () => _Holder(null),
+    );
+
+/// Which route the last transcription actually connected over ('Wi-Fi / LAN'
+/// or 'Tailscale'), for display in the transcript view. Null until one runs.
+final transcribeRouteInUseProvider =
+    NotifierProvider<_Holder<String?>, String?>(() => _Holder(null));
+
 /// Transcription queue: episode id -> job (episode, podcast, stage, progress).
 /// Insertion-ordered, so its values are the queue order (first non-queued
 /// entry is the one currently running).
