@@ -42,16 +42,24 @@ class _RouteChip extends StatelessWidget {
   }
 }
 
-String _statusLabel(TranscribeJob s) {
-  final pct = (s.progress * 100).round();
-  return switch (s.stage) {
-    'queued' => 'Queued…',
-    'downloading' => s.progress > 0 ? 'Downloading… $pct%' : 'Downloading…',
-    'transcribing' => 'Transcribing… $pct%',
-    'waiting' => 'Finishing on your Mac… (reconnected)',
-    _ => 'Transcribing on your Mac…',
-  };
-}
+/// Headline above the progress bar. The percentage is rendered separately
+/// beside the bar, so it isn't repeated here.
+String _statusLabel(TranscribeJob s) => switch (s.stage) {
+  'queued' => 'Waiting in the queue',
+  'downloading' => 'Fetching the audio',
+  'transcribing' => 'Transcribing on your Mac',
+  'waiting' => 'Finishing on your Mac',
+  _ => 'Starting…',
+};
+
+/// Sub-label under the bar explaining what the current stage means.
+String _stageDetail(TranscribeJob s) => switch (s.stage) {
+  'queued' => 'Starts when the current job finishes',
+  'downloading' => 'Server is downloading the episode',
+  'transcribing' => 'Whisper is running',
+  'waiting' => 'Reconnected — waiting for the result',
+  _ => 'Contacting the server',
+};
 
 class TranscriptScreen extends ConsumerStatefulWidget {
   final Episode episode;
@@ -143,22 +151,50 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                 child: busy
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SizedBox(
-                            width: 64,
-                            height: 64,
-                            child: CircularProgressIndicator(
+                          Text(
+                            _statusLabel(status),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 14),
+                          // A bar reads better than a spinner for work that runs
+                          // for many minutes: it shows the run is alive and how
+                          // far along it is. Indeterminate until the server
+                          // reports a fraction (queued / starting / reconnected).
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
                               value: status.progress > 0
                                   ? status.progress
                                   : null,
+                              minHeight: 8,
+                              backgroundColor:
+                                  theme.colorScheme.surfaceContainerHighest,
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          Text(
-                            _statusLabel(status),
-                            style: theme.textTheme.titleMedium,
-                          ),
                           const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _stageDetail(status),
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (status.progress > 0)
+                                Text(
+                                  '${(status.progress * 100).round()}%',
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
                           Text(
                             'Whisper runs on the Mac server. A full episode can '
                             'take several minutes — keep the app open.',
@@ -167,7 +203,11 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                           ),
                           if (routeInUse != null) ...[
                             const SizedBox(height: 12),
-                            _RouteChip(label: 'Connected via $routeInUse'),
+                            Center(
+                              child: _RouteChip(
+                                label: 'Connected via $routeInUse',
+                              ),
+                            ),
                           ],
                         ],
                       )

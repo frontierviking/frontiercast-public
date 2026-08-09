@@ -7,6 +7,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-08-21
+
+### Changed
+- The transcript screen now shows a progress **bar** instead of a spinner while
+  a transcription runs, with the stage as a headline ("Transcribing on your
+  Mac"), a plain-language sub-label, and the percentage beside the bar. Easier
+  to tell at a glance that a long run is alive and how far along it is.
+
+### Added
+- `tools/serve-apk.sh` — serves the release APK over Tailscale for install from
+  the phone's browser. `adb` can't complete its TLS handshake over a Tailscale
+  DERP relay, so this is the deploy path when away from the home network (or on
+  guest Wi-Fi that blocks device-to-device traffic). Supports HTTP Range, so a
+  dropped transfer resumes instead of restarting.
+
 ## [1.11.0] - 2026-08-04
 
 ### Added
