@@ -43,7 +43,7 @@ class TranscribeClient {
   /// Home routers hand out new addresses whenever they re-lease, which silently
   /// breaks a hardcoded LAN IP; Android also won't resolve the Mac's `.local`
   /// mDNS name. Sweeping the subnet finds the Mac wherever it landed. Returns
-  /// the base URL (e.g. `http://192.168.1.22:8765`) or null if nothing answers.
+  /// the base URL (e.g. `http://10.0.0.42:8765`) or null if nothing answers.
   Future<String?> discoverOnLan({int port = 8765}) async {
     final prefixes = <String>{};
     try {
@@ -175,6 +175,48 @@ class TranscribeClient {
     if (text == null) throw const TranscribeInterrupted();
     if (text.isEmpty) throw TranscribeException('Empty transcript returned.');
     return text;
+  }
+
+  /// One poll result: either the finished transcript, or live progress for a
+  /// job the server is still working on.
+  Future<({String? text, String? stage, double? progress, bool running})>
+  pollStatus({
+    required String baseUrl,
+    required String token,
+    required String guid,
+    String? title,
+    String? podcast,
+  }) async {
+    final uri = Uri.parse('${_base(baseUrl)}/transcript').replace(
+      queryParameters: {
+        'guid': guid,
+        if (title != null && title.isNotEmpty) 'title': title,
+        if (podcast != null && podcast.isNotEmpty) 'podcast': podcast,
+      },
+    );
+    final resp = await _client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      return (text: null, stage: null, progress: null, running: false);
+    }
+    final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    if (data['ready'] == true) {
+      final text = (data['text'] as String?)?.trim() ?? '';
+      return (
+        text: text.isEmpty ? null : text,
+        stage: null,
+        progress: null,
+        running: false,
+      );
+    }
+    final p = data['progress'];
+    return (
+      text: null,
+      stage: data['stage'] as String?,
+      progress: p is num ? p.toDouble().clamp(0.0, 1.0) : null,
+      running: data['running'] == true,
+    );
   }
 
   /// Polls for a completed transcript without starting a new run. Returns the

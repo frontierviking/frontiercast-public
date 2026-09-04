@@ -475,10 +475,51 @@ class AppDatabase extends _$AppDatabase {
   );
 }
 
+/// Filename a restore is staged under. A picked backup can't overwrite the live
+/// database while SQLite holds it open (that corrupts it), so restore writes
+/// here and the swap happens below, before the database is opened.
+const kPendingRestoreFile = 'frontiercast.restore.sqlite';
+const kDatabaseFile = 'frontiercast.sqlite';
+
+/// Every SQLite file starts with this 16-byte header. Checking it catches the
+/// dangerous cases — a truncated copy, or the user picking the wrong file —
+/// before we replace a working database with something unopenable.
+Future<bool> _looksLikeSqlite(File f) async {
+  try {
+    if (await f.length() < 512) return false;
+    final head = await f.openRead(0, 16).first;
+    return String.fromCharCodes(head) == 'SQLite format 3\x00';
+  } catch (_) {
+    return false;
+  }
+}
+
 LazyDatabase _open() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'frontiercast.sqlite'));
+    final file = File(p.join(dir.path, kDatabaseFile));
+    final pending = File(p.join(dir.path, kPendingRestoreFile));
+    if (await pending.exists()) {
+      if (await _looksLikeSqlite(pending)) {
+        // Swap a staged restore into place before anything opens the database.
+        // Drop the WAL/SHM sidecars too, or SQLite would replay the old journal
+        // over the restored file.
+        for (final suffix in const ['-wal', '-shm']) {
+          final sidecar = File('${file.path}$suffix');
+          if (await sidecar.exists()) await sidecar.delete();
+        }
+        // Keep the outgoing database rather than deleting it, so a restore that
+        // turns out to be bad can be rolled back instead of losing everything.
+        final rollback = File('${file.path}.pre-restore');
+        if (await rollback.exists()) await rollback.delete();
+        if (await file.exists()) await file.rename(rollback.path);
+        await pending.rename(file.path);
+      } else {
+        // A truncated or non-database file would leave the app unopenable if we
+        // swapped it in — discard it and keep what's already here.
+        await pending.delete();
+      }
+    }
     return NativeDatabase.createInBackground(file);
   });
 }

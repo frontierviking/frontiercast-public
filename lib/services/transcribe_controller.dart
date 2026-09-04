@@ -243,14 +243,19 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       if (!state.containsKey(episode.id)) return null; // cancelled elsewhere
       await Future<void>.delayed(interval);
       try {
-        final text = await client.pollTranscript(
+        final status = await client.pollStatus(
           baseUrl: baseUrl,
           token: token,
           guid: episode.guid,
           title: episode.title,
           podcast: podcast?.title,
         );
-        if (text != null) return text;
+        if (status.text != null) return status.text;
+        // Keep the bar moving with the server's real progress — a dropped
+        // stream shouldn't downgrade a 20-minute run to a blank spinner.
+        if (status.running && status.stage != null) {
+          _setStage(episode.id, status.stage!, status.progress ?? 0);
+        }
       } catch (_) {
         // Transient network error while polling — keep trying.
       }

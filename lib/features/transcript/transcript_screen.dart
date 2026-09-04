@@ -48,7 +48,7 @@ String _statusLabel(TranscribeJob s) => switch (s.stage) {
   'queued' => 'Waiting in the queue',
   'downloading' => 'Fetching the audio',
   'transcribing' => 'Transcribing on your Mac',
-  'waiting' => 'Finishing on your Mac',
+  'waiting' => 'Transcribing on your Mac',
   _ => 'Starting…',
 };
 
@@ -57,7 +57,7 @@ String _stageDetail(TranscribeJob s) => switch (s.stage) {
   'queued' => 'Starts when the current job finishes',
   'downloading' => 'Server is downloading the episode',
   'transcribing' => 'Whisper is running',
-  'waiting' => 'Reconnected — waiting for the result',
+  'waiting' => 'Running in the background — safe to leave this screen',
   _ => 'Contacting the server',
 };
 

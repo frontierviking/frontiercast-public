@@ -7,6 +7,36 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-09-04
+
+### Added
+- **Backup & transfer** in Settings, for moving to a new phone (the app has no
+  cloud sync, so everything lived in one file on the device with no way out).
+  - *Back up everything* writes a consistent snapshot via `VACUUM INTO` — a raw
+    file copy can miss recent writes sitting in the WAL — covering
+    subscriptions, played state, positions, transcripts and the manual order.
+  - *Restore from backup* stages the picked file and swaps it in on the next
+    launch, before SQLite opens anything; overwriting a live database corrupts
+    it. The staged file is header-checked first, and the outgoing database is
+    kept as `.pre-restore` rather than deleted, so a bad restore can't destroy
+    a working library.
+  - *Export subscriptions (OPML)* for a portable, any-app-readable copy.
+
+## [1.13.0] - 2026-08-22
+
+### Changed
+- Progress keeps flowing after a dropped connection. The server now tracks live
+  stage/progress per job and reports it from `/transcript`, so a phone that lost
+  the streaming connection shows a real percentage instead of an indeterminate
+  bar for the rest of the run.
+- Clearer wording while a job runs in the background: "Transcribing on your Mac
+  — running in the background, safe to leave this screen" replaces the
+  alarming-sounding "Reconnected — waiting for the result".
+
+### Changed (server)
+- **Restart the transcription server** to pick up per-job progress tracking on
+  the `/transcript` poll endpoint.
+
 ## [1.12.0] - 2026-08-21
 
 ### Changed

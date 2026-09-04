@@ -39,6 +39,28 @@ import mlx_whisper
 # so a single module-level callback is safe.
 _progress_cb = None
 
+# Live progress per guid, so the /transcript poll endpoint can report how far
+# along a job is. Without it, a phone whose streaming connection dropped shows
+# an indeterminate bar for the rest of the run — which reads like a failure.
+_job_progress: dict = {}
+_job_progress_lock = threading.Lock()
+
+
+def _set_job_progress(guid, stage, progress):
+    with _job_progress_lock:
+        _job_progress[guid] = {"stage": stage, "progress": progress}
+
+
+def _clear_job_progress(guid):
+    with _job_progress_lock:
+        _job_progress.pop(guid, None)
+
+
+def _get_job_progress(guid):
+    with _job_progress_lock:
+        entry = _job_progress.get(guid)
+        return dict(entry) if entry else None
+
 
 class _ProgressBar:
     def __init__(self, *args, total=None, **kwargs):
@@ -159,7 +181,18 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 )
             else:
-                self._send(200, {"ready": False})
+                # Not done yet — hand back live stage/progress if the job is
+                # still running, so a reconnected phone keeps a real progress
+                # bar instead of an indeterminate one.
+                body = {"ready": False}
+                live = _get_job_progress(guid)
+                if live:
+                    body["stage"] = live.get("stage")
+                    body["progress"] = live.get("progress")
+                    body["running"] = True
+                else:
+                    body["running"] = False
+                self._send(200, body)
             return
         self._send(404, {"error": "not found"})
 
@@ -238,25 +271,28 @@ class Handler(BaseHTTPRequestHandler):
                         marker = 0
                         with open(tmp_path, "wb") as out:
                             events.put({"stage": "downloading", "progress": 0.0})
+                            _set_job_progress(guid, "downloading", 0.0)
                             for chunk in resp.iter_bytes(1 << 16):
                                 out.write(chunk)
                                 got += len(chunk)
                                 # Heartbeat every ~4 MB so the socket stays alive.
                                 if got - marker >= (4 << 20):
                                     marker = got
+                                    frac = (got / total) if total else None
                                     events.put(
-                                        {
-                                            "stage": "downloading",
-                                            "progress": (got / total) if total else None,
-                                        }
+                                        {"stage": "downloading", "progress": frac}
                                     )
+                                    _set_job_progress(guid, "downloading", frac)
                     kwargs = {"path_or_hf_repo": MODEL}
                     if language:
                         kwargs["language"] = language
                     print(f"[transcribe] running whisper (guid={guid})", flush=True)
-                    _progress_cb = lambda p: events.put(  # noqa: E731
-                        {"stage": "transcribing", "progress": p}
-                    )
+                    def _on_progress(p, _guid=guid):
+                        events.put({"stage": "transcribing", "progress": p})
+                        _set_job_progress(_guid, "transcribing", p)
+
+                    _set_job_progress(guid, "transcribing", 0.0)
+                    _progress_cb = _on_progress
                     result = mlx_whisper.transcribe(tmp_path, **kwargs)
                     _progress_cb = None
                     text = (result.get("text") or "").strip()
@@ -269,6 +305,7 @@ class Handler(BaseHTTPRequestHandler):
                 events.put({"error": str(exc)})
             finally:
                 _progress_cb = None
+                _clear_job_progress(guid)
                 if tmp_path and os.path.exists(tmp_path):
                     try:
                         os.remove(tmp_path)

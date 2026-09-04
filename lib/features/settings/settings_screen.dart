@@ -1,13 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/repositories/podcast_repository.dart';
 import '../../data/transcribe/transcribe_settings.dart';
 import '../../providers.dart';
+import '../../services/backup_service.dart';
 import '../player/skip_seconds_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -50,6 +53,28 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Mark all episodes as played'),
             subtitle: const Text('Across every podcast'),
             onTap: () => _markAllPlayed(context, ref),
+          ),
+          const Divider(),
+          const _SectionHeader('Backup & transfer'),
+          ListTile(
+            leading: const Icon(Icons.save_alt),
+            title: const Text('Back up everything…'),
+            subtitle: const Text(
+              'Subscriptions, played state, positions, transcripts',
+            ),
+            onTap: () => _backupDatabase(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings_backup_restore),
+            title: const Text('Restore from backup…'),
+            subtitle: const Text('Replaces everything on this device'),
+            onTap: () => _restoreDatabase(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.rss_feed),
+            title: const Text('Export subscriptions (OPML)…'),
+            subtitle: const Text('Subscriptions only — readable by any app'),
+            onTap: () => _exportOpml(context, ref),
           ),
           const Divider(),
           const _SectionHeader('Playback'),
@@ -265,6 +290,99 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (value != null && value.isNotEmpty) await onSave(value);
+  }
+
+  Future<void> _backupDatabase(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final service = BackupService(ref.read(databaseProvider));
+    try {
+      final stats = await service.stats();
+      final file = await service.exportDatabase();
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'FrontierCast backup',
+          text:
+              'FrontierCast backup — ${stats.podcasts} subscriptions, '
+              '${stats.episodes} episodes, ${stats.transcripts} transcripts.',
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+    }
+  }
+
+  Future<void> _exportOpml(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final service = BackupService(ref.read(databaseProvider));
+    try {
+      final file = await service.exportOpml();
+      final stats = await service.stats();
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'FrontierCast subscriptions',
+          text: '${stats.podcasts} podcast subscriptions (OPML).',
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
+  }
+
+  Future<void> _restoreDatabase(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: const Text(
+          'This replaces every subscription, played state, position and '
+          'transcript on this device with the contents of the backup.\n\n'
+          'The app closes afterwards — reopen it to finish.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Choose file'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final service = BackupService(ref.read(databaseProvider));
+    try {
+      // Any extension — Android pickers often hand back .sqlite as generic.
+      final result = await FilePicker.pickFiles(withData: false);
+      final path = result?.files.single.path;
+      if (path == null) return;
+      await service.stageRestore(File(path));
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Backup staged'),
+          content: const Text(
+            'Fully close FrontierCast (swipe it away from recents) and open it '
+            'again. The backup is applied on the next launch.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+    }
   }
 
   Future<void> _markAllPlayed(BuildContext context, WidgetRef ref) async {
