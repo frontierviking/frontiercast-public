@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../data/db/database.dart';
 import '../../providers.dart';
+import '../../services/playback_controller.dart';
 import 'now_playing_screen.dart';
 
 /// Persistent bottom bar: the single play/pause control whenever an episode is
@@ -13,7 +15,17 @@ class MiniPlayer extends ConsumerWidget {
   /// MiniPlayer is the bottom-most widget (e.g. a screen's bottomNavigationBar);
   /// not needed in HomeShell where the NavigationBar below it absorbs the inset.
   final bool useSafeArea;
-  const MiniPlayer({super.key, this.useSafeArea = false});
+
+  /// Collapse while the user scrolls further down a list, and come back on the
+  /// way up. Only HomeShell opts in — screens that own their own bar keep it
+  /// pinned, so it can't vanish somewhere there's no way to get it back.
+  final bool hideOnScroll;
+
+  const MiniPlayer({
+    super.key,
+    this.useSafeArea = false,
+    this.hideOnScroll = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,10 +33,32 @@ class MiniPlayer extends ConsumerWidget {
     final episode = playback.episode;
     if (episode == null) return const SizedBox.shrink();
 
+    final visible = hideOnScroll ? ref.watch(miniPlayerVisibleProvider) : true;
+
     final podcast = playback.podcast;
     final scheme = Theme.of(context).colorScheme;
     final controller = ref.read(playbackControllerProvider.notifier);
 
+    // Collapsing height (rather than sliding away) keeps the NavigationBar
+    // below it still, so the tabs don't jump around as the bar comes and goes.
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: visible
+          ? _bar(context, ref, episode, podcast, scheme, controller)
+          : const SizedBox(width: double.infinity),
+    );
+  }
+
+  Widget _bar(
+    BuildContext context,
+    WidgetRef ref,
+    Episode episode,
+    Podcast? podcast,
+    ColorScheme scheme,
+    PlaybackController controller,
+  ) {
     final playerState = ref.watch(playerStateProvider).value;
     final playing = playerState?.playing ?? false;
     final processing = playerState?.processingState;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/downloads/downloads_screen.dart';
@@ -104,6 +105,27 @@ class _HomeShellState extends ConsumerState<HomeShell>
     if (state == AppLifecycleState.resumed) _quietRefresh();
   }
 
+  /// Hides the mini player while the user scrolls further down a list and
+  /// brings it back on the way up, so browsing the library isn't done through
+  /// a permanently shortened window.
+  bool _onUserScroll(UserScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final visible = switch (n.direction) {
+      // Swiping up — content moving toward the top, i.e. going deeper in.
+      ScrollDirection.reverse => false,
+      ScrollDirection.forward => true,
+      // Idle fires on release; leave the bar wherever the gesture left it.
+      ScrollDirection.idle => null,
+    };
+    // At the very top there's nothing to make room for, so always show.
+    final atTop = n.metrics.pixels <= n.metrics.minScrollExtent;
+    final next = atTop ? true : visible;
+    if (next != null && next != ref.read(miniPlayerVisibleProvider)) {
+      ref.read(miniPlayerVisibleProvider.notifier).state = next;
+    }
+    return false;
+  }
+
   /// Refreshes all subscribed feeds quietly in the background (no spinner),
   /// throttled so foreground switches don't hammer the network.
   Future<void> _quietRefresh() async {
@@ -175,15 +197,21 @@ class _HomeShellState extends ConsumerState<HomeShell>
         if (_index != 0) setState(() => _index = 0);
       },
       child: Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: _onUserScroll,
+        child: IndexedStack(index: _index, children: _screens),
+      ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MiniPlayer(),
+          const MiniPlayer(hideOnScroll: true),
           NavigationBar(
             selectedIndex: _index,
             onDestinationSelected: (i) {
               ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+              // A tab you arrive at shouldn't inherit the last one's scroll
+              // state and open with the bar already hidden.
+              ref.read(miniPlayerVisibleProvider.notifier).state = true;
               setState(() => _index = i);
             },
             destinations: const [

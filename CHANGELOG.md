@@ -7,6 +7,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-09-05
+
+### Added
+- The mini player now gets out of the way while you browse. Scrolling further
+  down a list collapses it; scrolling back up brings it straight back, as does
+  reaching the top of the list or switching tabs. Browsing the library no
+  longer happens through a permanently shortened window, and the bar is still
+  one flick away when you want to jump back to what you were listening to.
+  It collapses in height rather than sliding out, so the tab bar underneath
+  stays put. Screens that carry their own copy of the bar (a podcast's episode
+  list) keep it pinned.
+
+
 ## [1.15.2] - 2026-09-05
 
 ### Fixed

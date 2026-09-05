@@ -117,6 +117,13 @@ final transcribeErrorProvider =
       () => _Holder(null),
     );
 
+/// Whether the mini player is showing in the home shell. Set false while the
+/// user scrolls further down a list so the bar gets out of the way, true again
+/// on the way back up. Lives here rather than in the screen because the bar is
+/// in HomeShell's bottom slot while the scrolling happens inside a tab.
+final miniPlayerVisibleProvider =
+    NotifierProvider<_Holder<bool>, bool>(() => _Holder(true));
+
 /// Which route the last transcription actually connected over ('Wi-Fi / LAN'
 /// or 'Tailscale'), for display in the transcript view. Null until one runs.
 final transcribeRouteInUseProvider =
