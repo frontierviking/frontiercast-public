@@ -83,6 +83,12 @@ class _HomeShellState extends ConsumerState<HomeShell>
     // Let the first frames and initial scroll settle before kicking off the
     // background refresh, so startup feels instant.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Pick up any transcription the OS killed us in the middle of. Done from
+      // the first frame so the foreground service is started while we're
+      // visibly in the foreground, which Android requires.
+      ref.read(transcribeControllerProvider.notifier).restoreQueue();
+      // Put the episode you were last listening to back in the bottom bar.
+      ref.read(playbackControllerProvider.notifier).restoreLastEpisode();
       Future.delayed(const Duration(seconds: 3), _quietRefresh);
     });
   }

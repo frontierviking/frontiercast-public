@@ -7,6 +7,44 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-09-05
+
+### Fixed
+- **Pausing an episode no longer leaves the app free to be killed.**
+  audio_service drops its foreground service on pause by default, so a paused
+  episode lost all process priority — the exit log shows it frozen and then
+  killed while cached, which is why coming back to a paused podcast so often
+  found the app dead and the bottom bar empty. The service is now held through
+  pause (`androidStopForegroundOnPause: false`); the playback notification
+  becomes dismissible in exchange, as in most podcast apps.
+
+
+## [1.15.0] - 2026-09-05
+
+### Fixed
+- **Transcriptions no longer die when the app goes to the background.** Android's
+  own exit log showed this process killed three times in a single day — frozen
+  by Samsung's Freecess seconds after losing focus, then killed outright — which
+  destroyed multi-hour jobs silently, with no error and nothing to resume. The
+  queue now runs inside a foreground service for as long as it's busy.
+- **The queue survives the process.** Queued and running episode ids are
+  persisted and re-enqueued at launch. The server keeps working after the phone
+  disappears and caches transcripts by guid, so a resumed job usually returns
+  from that cache immediately instead of transcribing again.
+- **The episode you were listening to is back in the bottom bar after a
+  restart.** Playback state lived only in memory, so a kill left a paused
+  episode with no way back to it but hunting through the library. The mini
+  player is restored at launch; the audio source opens on first play, so
+  startup stays cheap and a streamed episode doesn't buffer just because the
+  app opened.
+
+### Changed
+- Image cache cut from 256 MB to 64 MB (500 → 300 entries). It had made the app
+  the fattest target on the phone — 530 MB resident at kill time — and so was
+  contributing to the very kills above. Thumbnails still stay decoded several
+  screens deep.
+
+
 ## [1.14.0] - 2026-09-04
 
 ### Added
@@ -22,7 +60,7 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
     a working library.
   - *Export subscriptions (OPML)* for a portable, any-app-readable copy.
 
-## [1.13.0] - 2026-08-22
+## [1.13.0] - 2026-08-18
 
 ### Changed
 - Progress keeps flowing after a dropped connection. The server now tracks live

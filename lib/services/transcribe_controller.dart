@@ -1,11 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/db/database.dart';
 import '../data/transcribe/transcribe_client.dart';
 import '../data/transcribe/transcribe_settings.dart';
 import '../providers.dart';
+import 'transcription_foreground_service.dart';
+
+/// Episode ids of everything queued or running, mirrored to disk so a killed
+/// process can pick the queue back up.
+const _kQueueKey = 'transcribe_queue_v1';
 
 /// No configured transcription address answered a health check. [tried] holds
 /// the human labels of the routes attempted ('Wi-Fi / LAN', 'Tailscale').
@@ -87,9 +93,55 @@ class TranscribeJob {
 class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
   final List<int> _pending = [];
   bool _running = false;
+  final _service = const TranscriptionForegroundService();
 
   @override
   Map<int, TranscribeJob> build() => {};
+
+  /// Mirrors the queue to disk. [state] is insertion-ordered and holds both the
+  /// queued and the currently-running job, so its keys are the whole queue.
+  Future<void> _saveQueue() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _kQueueKey,
+        state.keys.map((id) => '$id').toList(),
+      );
+    } catch (_) {
+      // Persistence is a convenience; never let it break the queue.
+    }
+  }
+
+  /// Re-enqueues whatever was in flight when the process last died.
+  ///
+  /// Android kills this app aggressively during a long transcription, and the
+  /// queue used to live only in memory — so a job vanished silently and had to
+  /// be found and started again by hand. The server keeps working after the
+  /// phone disappears and caches the result by guid, so a resumed job usually
+  /// comes straight back from that cache instead of re-transcribing.
+  Future<void> restoreQueue() async {
+    List<String> ids;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      ids = prefs.getStringList(_kQueueKey) ?? const [];
+    } catch (_) {
+      return;
+    }
+    if (ids.isEmpty) return;
+
+    final db = ref.read(databaseProvider);
+    for (final raw in ids) {
+      final id = int.tryParse(raw);
+      if (id == null || state.containsKey(id)) continue;
+      final episode = await db.episodeDao.getById(id);
+      // Gone from the library, or the Mac finished it while we were dead.
+      if (episode == null) continue;
+      if (await db.transcriptDao.getByEpisode(id) != null) continue;
+      final podcast = await db.podcastDao.getById(episode.podcastId);
+      await transcribe(episode, podcast);
+    }
+    await _saveQueue();
+  }
 
   bool isTranscribing(int episodeId) => state.containsKey(episodeId);
 
@@ -109,6 +161,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       ),
     };
     _pending.add(episode.id);
+    unawaited(_saveQueue());
     unawaited(_pump());
   }
 
@@ -120,6 +173,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
     if (state.containsKey(episodeId)) {
       state = {...state}..remove(episodeId);
     }
+    unawaited(_saveQueue());
   }
 
   void _setStage(int id, String stage, double progress) {
@@ -131,6 +185,12 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
   Future<void> _pump() async {
     if (_running) return;
     _running = true;
+    // Hold a foreground service for as long as the queue is busy, or the OS
+    // freezes this process seconds after the app loses focus and kills the run.
+    final first = state.values.isEmpty ? null : state.values.first;
+    await _service.start(
+      first == null ? 'Transcribing…' : 'Transcribing ${first.episode.title}',
+    );
     try {
       while (_pending.isNotEmpty) {
         final id = _pending.removeAt(0);
@@ -140,6 +200,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       }
     } finally {
       _running = false;
+      await _service.stop();
     }
   }
 
@@ -194,6 +255,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       if (state.containsKey(episode.id)) {
         state = {...state}..remove(episode.id);
       }
+      await _saveQueue();
     }
   }
 

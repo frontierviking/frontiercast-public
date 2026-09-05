@@ -32,10 +32,15 @@ class MiniPlayer extends ConsumerWidget {
         processing == ProcessingState.loading ||
         processing == ProcessingState.buffering;
 
+    // An episode restored at launch has no live position stream yet — its audio
+    // is only opened on the first play — so fall back to the position stored on
+    // the episode, or the bar would read zero for something half-listened.
     final posData = ref.watch(positionDataProvider).value;
-    final progress = (posData != null && posData.duration.inMilliseconds > 0)
-        ? posData.position.inMilliseconds / posData.duration.inMilliseconds
-        : 0.0;
+    final liveDurationMs = posData?.duration.inMilliseconds ?? 0;
+    final savedDurationMs = episode.durationMs ?? 0;
+    final progress = liveDurationMs > 0
+        ? posData!.position.inMilliseconds / liveDurationMs
+        : (savedDurationMs > 0 ? episode.positionMs / savedDurationMs : 0.0);
 
     final bottomInset = useSafeArea ? MediaQuery.paddingOf(context).bottom : 0.0;
 

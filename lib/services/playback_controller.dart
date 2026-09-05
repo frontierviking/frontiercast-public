@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/db/database.dart';
 import '../domain/models.dart';
@@ -20,6 +21,9 @@ class PositionData {
 }
 
 const _unset = Object();
+
+/// The episode the mini player should come back to after a restart.
+const _kLastEpisodeKey = 'last_episode_id';
 
 class PlaybackState {
   final Episode? episode;
@@ -74,6 +78,11 @@ class PlaybackController extends Notifier<PlaybackState> {
   int _lastSavedSec = -1000;
   bool _marked = false;
   bool _recovering = false;
+
+  /// Whether the audio source for [PlaybackState.episode] is actually loaded
+  /// into the player. False after [restoreLastEpisode], which puts an episode
+  /// in the bar without paying to open its audio at launch.
+  bool _prepared = false;
   Timer? _sleepTimer;
   StreamSubscription<Episode?>? _episodeSub;
 
@@ -137,7 +146,9 @@ class PlaybackController extends Notifier<PlaybackState> {
   }
 
   Future<void> playEpisode(Episode episode, Podcast podcast) async {
-    if (state.episode?.id == episode.id) {
+    // Only a shortcut when the source is genuinely loaded — after a restore the
+    // episode is in the bar but the player is empty, and play() would no-op.
+    if (_prepared && state.episode?.id == episode.id) {
       await _player.play();
       return;
     }
@@ -155,7 +166,10 @@ class PlaybackController extends Notifier<PlaybackState> {
         uri: _sourceFor(fresh),
         initialPosition: Duration(milliseconds: fresh.positionMs),
       );
+      _prepared = true;
+      unawaited(_rememberLastEpisode(fresh.id));
     } catch (e) {
+      _prepared = false;
       _episodeSub?.cancel();
       // A dead source (404 etc.) marks the episode unavailable so the list can
       // grey it out. Don't penalise plain connectivity failures — those are
@@ -173,6 +187,43 @@ class PlaybackController extends Notifier<PlaybackState> {
       );
       rethrow;
     }
+  }
+
+  Future<void> _rememberLastEpisode(int id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kLastEpisodeKey, id);
+    } catch (_) {
+      // Only costs us the mini player on next launch.
+    }
+  }
+
+  /// Puts the last-played episode back in the mini player at startup.
+  ///
+  /// Playback state is in memory, and this process gets killed often — so an
+  /// episode you paused was simply gone from the bottom bar on the next launch,
+  /// leaving no way back to it but hunting through the library. This restores
+  /// the bar only: the audio source is opened lazily on the first play, so
+  /// launching stays cheap and a streamed episode doesn't start buffering (or
+  /// raise a media notification) just because the app opened.
+  Future<void> restoreLastEpisode() async {
+    if (state.episode != null) return; // something is already loaded
+    int? id;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      id = prefs.getInt(_kLastEpisodeKey);
+    } catch (_) {
+      return;
+    }
+    if (id == null) return;
+    final episode = await _db.episodeDao.getById(id);
+    if (episode == null) return;
+    final podcast = await _db.podcastDao.getById(episode.podcastId);
+    if (podcast == null) return;
+    _prepared = false;
+    _marked = episode.isPlayed;
+    state = state.copyWith(episode: episode, podcast: podcast);
+    _watchEpisode(episode.id);
   }
 
   /// Best available source: the downloaded file when present, else the stream.
@@ -202,7 +253,11 @@ class PlaybackController extends Notifier<PlaybackState> {
     }
     final wasStreaming = !_isLocal(current);
     state = state.copyWith(episode: e);
-    if (wasStreaming && _isLocal(e)) {
+    // Nothing to swap if the source was never opened (restored at launch): the
+    // lazy load on first play picks up the downloaded file by itself, and
+    // swapping here would seek to the empty player's position — i.e. back to
+    // zero, throwing away where the user actually was.
+    if (wasStreaming && _isLocal(e) && _prepared) {
       final resume = _player.playing;
       final at = _player.position;
       try {
@@ -248,9 +303,18 @@ class PlaybackController extends Notifier<PlaybackState> {
     if (_player.playing) {
       await _handler.pause();
       await _savePosition(force: true);
-    } else {
-      await _handler.play();
+      return;
     }
+    // Restored from a previous run: nothing is loaded yet, so open the source
+    // now (from its saved position) instead of calling play() into an empty
+    // player, which would silently do nothing.
+    final episode = state.episode;
+    final podcast = state.podcast;
+    if (!_prepared && episode != null && podcast != null) {
+      await playEpisode(episode, podcast);
+      return;
+    }
+    await _handler.play();
   }
 
   Future<void> seek(Duration position) => _handler.seek(position);
