@@ -167,9 +167,13 @@ class PlaybackController extends Notifier<PlaybackState> {
         initialPosition: Duration(milliseconds: fresh.positionMs),
       );
       _prepared = true;
+      _handler.onPlayUnprepared = null;
       unawaited(_rememberLastEpisode(fresh.id));
     } catch (e) {
       _prepared = false;
+      // The episode is cleared from state below, so the stale lazy-load
+      // closure must go with it.
+      _handler.onPlayUnprepared = null;
       _episodeSub?.cancel();
       // A dead source (404 etc.) marks the episode unavailable so the list can
       // grey it out. Don't penalise plain connectivity failures — those are
@@ -223,6 +227,9 @@ class PlaybackController extends Notifier<PlaybackState> {
     _prepared = false;
     _marked = episode.isPlayed;
     state = state.copyWith(episode: episode, podcast: podcast);
+    // Route a headset/notification/car play button through the same lazy load
+    // the in-app button uses, rather than into an empty player.
+    _handler.onPlayUnprepared = () => playEpisode(episode, podcast);
     _watchEpisode(episode.id);
   }
 

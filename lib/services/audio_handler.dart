@@ -81,8 +81,22 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
     ProcessingState.completed: AudioProcessingState.completed,
   };
 
+  /// Set while an episode is showing in the UI but its audio hasn't been opened
+  /// yet — the state [PlaybackController.restoreLastEpisode] leaves behind at
+  /// launch. Without this, a headset button, the notification, or a car control
+  /// would call [play] straight into an empty player and silently do nothing,
+  /// even though the app looks ready to resume. Cleared once a source loads.
+  Future<void> Function()? onPlayUnprepared;
+
   @override
-  Future<void> play() => player.play();
+  Future<void> play() async {
+    final loadFirst = onPlayUnprepared;
+    if (loadFirst != null) {
+      await loadFirst();
+      return;
+    }
+    await player.play();
+  }
 
   @override
   Future<void> pause() => player.pause();

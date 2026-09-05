@@ -7,6 +7,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-09-05
+
+### Fixed
+- A headset, notification, or car play button now resumes a restored episode
+  instead of doing nothing. Restoring the mini player at launch (1.15.0) leaves
+  the episode on screen with its audio deliberately not opened yet, and only
+  the in-app button knew to load it first — from anywhere else, play went into
+  an empty player and the app just sat there looking ready.
+
+
 ## [1.15.1] - 2026-09-05
 
 ### Fixed
