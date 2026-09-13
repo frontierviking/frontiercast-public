@@ -178,7 +178,7 @@ class PlaybackController extends Notifier<PlaybackState> {
       // A dead source (404 etc.) marks the episode unavailable so the list can
       // grey it out. Don't penalise plain connectivity failures — those are
       // transient and would wrongly grey everything while offline.
-      if (!_isNetworkError(e)) {
+      if (_isDeadSource(e)) {
         await _db.episodeDao.setUnavailable(fresh.id, true);
       }
       // Load errors (e.g. HTTP 404 on the audio URL) come through here rather
@@ -423,12 +423,28 @@ class PlaybackController extends Notifier<PlaybackState> {
 
 /// True when an error looks like transient connectivity rather than a dead
 /// source — used to avoid greying out episodes just because the user is offline.
-bool _isNetworkError(Object error) {
+/// True only with positive evidence that the source itself is gone — something
+/// the publisher controls, rather than a condition of this phone's network.
+///
+/// Greying an episode out and labelling it "Unavailable" is a claim that the
+/// file no longer exists, so it needs proof. The old test asked the opposite
+/// question — "is this a network error I recognise?" — and condemned the
+/// episode whenever the answer was no. A timeout matched none of its four
+/// strings, so an episode that was perfectly fine got permanently marked dead
+/// (seen for real: a phone whose IPv6 route was blackholed by a VPN, where
+/// every request to one podcast's tracking host hung instead of failing).
+/// Anything ambiguous now leaves the episode alone; the worst case is a retry.
+bool _isDeadSource(Object error) {
   final s = error.toString();
-  return s.contains('SocketException') ||
-      s.contains('Failed host lookup') ||
-      s.contains('Unable to connect') ||
-      s.contains('Network is unreachable');
+  final code = RegExp(r'Response code:?\s*(\d{3})').firstMatch(s);
+  if (code != null) {
+    final status = int.parse(code.group(1)!);
+    // Gone (404/410) or withdrawn behind auth (403). A 5xx is the server
+    // having a bad day, and says nothing about the episode.
+    return status == 404 || status == 410 || status == 403;
+  }
+  return s.contains('UnrecognizedInputFormatException') ||
+      s.contains('Unsupported format');
 }
 
 /// Best-effort mapping of a player exception to a user-readable message.
@@ -448,6 +464,15 @@ String _friendlyPlaybackError(Object error) {
       s.contains('Unable to connect') ||
       s.contains('Network is unreachable')) {
     return 'Network error — check your connection.';
+  }
+  // A hang is not a missing file. Worth calling out separately: a VPN that
+  // blackholes one address family makes exactly this happen, and only for
+  // the hosts that publish a record for it.
+  if (s.contains('SocketTimeoutException') ||
+      s.contains('timed out') ||
+      s.contains('ETIMEDOUT')) {
+    return 'Timed out reaching the audio. If a VPN is on, try it off — '
+        'otherwise check your connection and retry.';
   }
   if (s.contains('UnrecognizedInputFormatException') ||
       s.contains('Unsupported format')) {

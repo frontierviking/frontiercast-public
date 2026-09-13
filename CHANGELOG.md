@@ -7,6 +7,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-09-13
+
+### Fixed
+- A network timeout no longer condemns an episode as "Unavailable". That label
+  claims the publisher removed the file, so it now requires proof — an HTTP
+  404/410/403, or audio the decoder can't read. The old test asked the reverse
+  question ("is this one of four network errors I recognise?") and greyed out
+  the episode whenever the answer was no; a timeout matched none of them, so a
+  perfectly good episode was marked permanently dead and stayed that way.
+  Found via a phone whose IPv6 route was being blackholed by a VPN: every
+  request to one podcast's tracking host hung, and that show alone was the only
+  one in the library whose CDN publishes an AAAA record.
+- Timeouts now say so, instead of "the publisher may have removed it", and
+  suggest trying without a VPN.
+
+
 ## [1.16.0] - 2026-09-05
 
 ### Added
