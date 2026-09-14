@@ -25,6 +25,14 @@ const _unset = Object();
 /// The episode the mini player should come back to after a restart.
 const _kLastEpisodeKey = 'last_episode_id';
 
+/// How long to let a source take before giving up on it.
+///
+/// ExoPlayer will wait more or less forever, and a stall gives no feedback at
+/// all — no error, no spinner state, nothing to retry. A hung DNS resolver hid
+/// behind that for a week, looking like a dead episode. Generous enough for a
+/// slow mobile connection to start a stream, short enough to say something.
+const _kLoadTimeout = Duration(seconds: 20);
+
 class PlaybackState {
   final Episode? episode;
   final Podcast? podcast;
@@ -161,11 +169,21 @@ class PlaybackController extends Notifier<PlaybackState> {
     state = state.copyWith(episode: fresh, podcast: podcast);
     _watchEpisode(fresh.id);
     try {
-      await _handler.loadAndPlay(
-        item: _mediaItem(fresh, podcast),
-        uri: _sourceFor(fresh),
-        initialPosition: Duration(milliseconds: fresh.positionMs),
-      );
+      final src = _sourceFor(fresh);
+      try {
+        await _handler
+            .loadAndPlay(
+              item: _mediaItem(fresh, podcast),
+              uri: src,
+              initialPosition: Duration(milliseconds: fresh.positionMs),
+            )
+            .timeout(_kLoadTimeout);
+      } on TimeoutException {
+        // Abandon the source; left alone the player sits in CONNECTING for
+        // minutes, showing nothing, which reads as the app being broken.
+        await _handler.stop();
+        throw _PlaybackStalled(await _stallReason(src));
+      }
       _prepared = true;
       _handler.onPlayUnprepared = null;
       unawaited(_rememberLastEpisode(fresh.id));
@@ -423,6 +441,42 @@ class PlaybackController extends Notifier<PlaybackState> {
 
 /// True when an error looks like transient connectivity rather than a dead
 /// source — used to avoid greying out episodes just because the user is offline.
+/// TEMPORARY diagnostics (1.16.2). `print` survives release AOT and lands in
+/// logcat under the `flutter` tag, which is the only way to see what the app's
+/// own network path does — adb shell can't resolve DNS, and `run-as` is barred
+/// on a release build. Strip these once the stall is understood.
+/// A load that never finished. Carries a plain-language [reason] worked out
+/// after the fact, so the message can name the actual obstacle.
+class _PlaybackStalled implements Exception {
+  final String reason;
+  const _PlaybackStalled(this.reason);
+  @override
+  String toString() => 'Playback stalled: $reason';
+}
+
+/// Works out why a load stalled, so the user gets something actionable rather
+/// than a spinner that never resolves. Runs only after a stall has happened,
+/// so a healthy play pays nothing for it.
+Future<String> _stallReason(Uri uri) async {
+  if (uri.scheme == 'file') {
+    return 'the downloaded file could not be read. Remove the download and '
+        'stream it instead.';
+  }
+  try {
+    await InternetAddress.lookup(
+      uri.host,
+    ).timeout(const Duration(seconds: 5));
+  } on TimeoutException {
+    // Seen for real: a VPN's own resolver accepting the query and never
+    // answering, which stalls playback silently and indefinitely.
+    return "the name server never answered for ${uri.host}. If a VPN is on, "
+        'try turning off its DNS setting.';
+  } catch (_) {
+    return "${uri.host} couldn't be looked up — check your connection.";
+  }
+  return 'the server accepted the connection but never sent any audio.';
+}
+
 /// True only with positive evidence that the source itself is gone — something
 /// the publisher controls, rather than a condition of this phone's network.
 ///
@@ -449,6 +503,9 @@ bool _isDeadSource(Object error) {
 
 /// Best-effort mapping of a player exception to a user-readable message.
 String _friendlyPlaybackError(Object error) {
+  if (error is _PlaybackStalled) {
+    return 'Gave up loading this episode — ${error.reason}';
+  }
   final s = error.toString();
   final httpCode = RegExp(r'Response code:?\s*(\d{3})').firstMatch(s);
   if (httpCode != null) {

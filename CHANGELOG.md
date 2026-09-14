@@ -7,6 +7,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.16.3] - 2026-09-14
+
+### Fixed
+- A stalled episode now gives up and says why, instead of sitting silent
+  forever. ExoPlayer waits more or less indefinitely on a source that never
+  responds — no error, no spinner state, nothing to retry — so a load is now
+  capped at 20 seconds. On a stall the app works out the actual obstacle and
+  names it: a name server that never answered (with a nudge about VPN DNS
+  settings), a host that can't be looked up, an unreadable downloaded file, or
+  a server that connected and then sent nothing.
+  This is what hid a hung DNS resolver for a week: the episode looked simply
+  dead, with no clue that resolution was the problem.
+
+
 ## [1.16.1] - 2026-09-13
 
 ### Fixed
