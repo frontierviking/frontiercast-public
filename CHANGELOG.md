@@ -7,6 +7,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.16.4] - 2026-09-14
+
+### Fixed
+- Playback no longer cuts out after exactly 20 seconds — a regression from the
+  stall timeout added in 1.16.3. just_audio's `play()` completes when playback
+  *stops*, not when it starts, so the load future stayed pending for the whole
+  episode and the 20-second guard tore the player down mid-listen. `play()` is
+  no longer awaited as part of loading; the timeout now covers only preparing
+  the source, which is what it was meant to guard.
+
+
 ## [1.16.3] - 2026-09-14
 
 ### Fixed

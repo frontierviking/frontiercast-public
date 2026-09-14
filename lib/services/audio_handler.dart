@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -42,7 +44,13 @@ class PodcastAudioHandler extends BaseAudioHandler with SeekHandler {
       AudioSource.uri(uri, tag: item),
       initialPosition: initialPosition,
     );
-    if (play) await player.play();
+    // Deliberately not awaited: just_audio's play() completes when playback
+    // *stops*, not when it starts, so awaiting it leaves this future pending
+    // for the whole episode. Callers treat "loaded" as the source being ready,
+    // and playback state is observed through the streams — so awaiting here
+    // just hides the finish line. (A load timeout around this method was
+    // consequently firing mid-episode and tearing the player down.)
+    if (play) unawaited(player.play());
   }
 
   void _broadcastState() {
