@@ -7,6 +7,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-01
+
+### Fixed
+- A transcription whose server died mid-run now restarts itself instead of
+  hanging. If the Mac reboots or the server is restarted while Whisper is
+  working, that work is gone — but the app went on polling `/transcript` for
+  forty minutes and then gave up without a word, which looked exactly like a
+  stuck job. The server already reports `running: false` for work it isn't
+  doing; the app now acts on it, re-submitting the job once after half a
+  minute of that answer. A second interruption is reported rather than retried,
+  so a Mac that keeps dying can't put the queue in a loop.
+
+
 ## [1.16.4] - 2026-09-14
 
 ### Fixed

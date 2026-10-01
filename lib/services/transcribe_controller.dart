@@ -13,6 +13,17 @@ import 'transcription_foreground_service.dart';
 /// process can pick the queue back up.
 const _kQueueKey = 'transcribe_queue_v1';
 
+/// Consecutive polls reporting "not running, no result" before concluding the
+/// server lost the job. At a 10s interval that's half a minute of grace.
+const _kIdlePollsBeforeLost = 3;
+
+/// The server is neither working on this job nor holding a result for it, so
+/// its work is gone — the Mac rebooted or the server restarted mid-run.
+/// Polling on would just wait out the clock and end in silence.
+class _ServerLostJob implements Exception {
+  const _ServerLostJob();
+}
+
 /// No configured transcription address answered a health check. [tried] holds
 /// the human labels of the routes attempted ('Wi-Fi / LAN', 'Tailscale').
 class _NoEndpointReachable implements Exception {
@@ -230,13 +241,31 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
           onProgress: (stage, p) => _setStage(episode.id, stage, p),
         );
       } on TranscribeInterrupted {
-        text = await _pollUntilReady(
-          client,
-          baseUrl,
-          settings.token,
-          episode,
-          podcast,
-        );
+        try {
+          text = await _pollUntilReady(
+            client,
+            baseUrl,
+            settings.token,
+            episode,
+            podcast,
+          );
+        } on _ServerLostJob {
+          // The Mac restarted mid-run (a reboot, a server restart) so the work
+          // is gone and no amount of polling will produce it. Start it again
+          // rather than waiting out a loop that can only end in silence.
+          // Deliberately one retry: a second interruption propagates and is
+          // reported, instead of looping forever on a Mac that keeps dying.
+          _setStage(episode.id, 'starting', 0);
+          text = await client.transcribe(
+            baseUrl: baseUrl,
+            token: settings.token,
+            audioUrl: episode.audioUrl,
+            guid: episode.guid,
+            title: episode.title,
+            podcast: podcast?.title,
+            onProgress: (stage, p) => _setStage(episode.id, stage, p),
+          );
+        }
       }
       if (text != null) {
         await ref
@@ -301,6 +330,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
     _setStage(episode.id, 'waiting', 0);
     // ~40 minutes of polling covers even very long episodes on the medium model.
     const interval = Duration(seconds: 10);
+    var idlePolls = 0;
     for (var i = 0; i < 240; i++) {
       if (!state.containsKey(episode.id)) return null; // cancelled elsewhere
       await Future<void>.delayed(interval);
@@ -313,11 +343,21 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
           podcast: podcast?.title,
         );
         if (status.text != null) return status.text;
-        // Keep the bar moving with the server's real progress — a dropped
-        // stream shouldn't downgrade a 20-minute run to a blank spinner.
-        if (status.running && status.stage != null) {
-          _setStage(episode.id, status.stage!, status.progress ?? 0);
+        if (status.running) {
+          idlePolls = 0;
+          // Keep the bar moving with the server's real progress — a dropped
+          // stream shouldn't downgrade a 20-minute run to a blank spinner.
+          if (status.stage != null) {
+            _setStage(episode.id, status.stage!, status.progress ?? 0);
+          }
+        } else if (++idlePolls >= _kIdlePollsBeforeLost) {
+          // Not working on it, and no result cached: the server's work is
+          // gone. A few polls' grace first, so a momentary gap between stages
+          // doesn't restart a job that's actually fine.
+          throw const _ServerLostJob();
         }
+      } on _ServerLostJob {
+        rethrow;
       } catch (_) {
         // Transient network error while polling — keep trying.
       }
