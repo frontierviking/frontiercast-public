@@ -44,22 +44,57 @@ class _RouteChip extends StatelessWidget {
 
 /// Headline above the progress bar. The percentage is rendered separately
 /// beside the bar, so it isn't repeated here.
-String _statusLabel(TranscribeJob s) => switch (s.stage) {
-  'queued' => 'Waiting in the queue',
-  'downloading' => 'Fetching the audio',
-  'transcribing' => 'Transcribing on your Mac',
-  'waiting' => 'Transcribing on your Mac',
-  _ => 'Starting…',
-};
+String _statusLabel(TranscribeJob s) {
+  if (s.stalled) {
+    return switch (s.stage) {
+      'downloading' => 'Paused — fetching the audio',
+      'transcribing' || 'waiting' => 'Paused — transcribing',
+      _ => "Paused — can't reach your Mac",
+    };
+  }
+  return switch (s.stage) {
+    'queued' => 'Waiting in the queue',
+    'downloading' => 'Fetching the audio',
+    'transcribing' => 'Transcribing on your Mac',
+    'waiting' => 'Transcribing on your Mac',
+    'restarting' => 'Starting over on your Mac',
+    _ => 'Starting…',
+  };
+}
 
 /// Sub-label under the bar explaining what the current stage means.
-String _stageDetail(TranscribeJob s) => switch (s.stage) {
-  'queued' => 'Starts when the current job finishes',
-  'downloading' => 'Server is downloading the episode',
-  'transcribing' => 'Whisper is running',
-  'waiting' => 'Running in the background — safe to leave this screen',
-  _ => 'Contacting the server',
-};
+///
+/// When stalled, the thing worth saying isn't that a socket closed — it's
+/// whether the work survives and what the user has to do. It does survive: the
+/// Mac suspends the job and carries on from the same point when it wakes, so
+/// the answer is "open the lid, nothing else".
+String _stageDetail(TranscribeJob s) {
+  if (s.stalled) {
+    final pct = s.progress > 0 ? ' (${(s.progress * 100).round()}%)' : '';
+    return switch (s.stage) {
+      'downloading' =>
+        'Your Mac stopped answering, usually because the lid is closed. '
+            'The download$pct is paused, not lost — it continues from here '
+            'when you open it. Nothing to do.',
+      'transcribing' || 'waiting' =>
+        'Your Mac stopped answering, usually because the lid is closed. '
+            'Whisper$pct is paused, not lost — it carries on from here when '
+            'you open it. Nothing to do.',
+      _ =>
+        'Open the lid and this picks up on its own. If your Mac is already '
+            'awake, check Wi-Fi or Tailscale.',
+    };
+  }
+  return switch (s.stage) {
+    'queued' => 'Starts when the current job finishes',
+    'downloading' => 'Server is downloading the episode',
+    'transcribing' => 'Whisper is running',
+    'waiting' => 'Running in the background — safe to leave this screen',
+    'restarting' => 'Your Mac came back without the job, so it is running '
+        'again from the beginning. Nothing to do.',
+    _ => 'Contacting the server',
+  };
+}
 
 class TranscriptScreen extends ConsumerStatefulWidget {
   final Episode episode;

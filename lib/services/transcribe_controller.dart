@@ -69,30 +69,45 @@ class TranscribeJob {
   final Episode episode;
   final Podcast? podcast;
 
-  /// 'queued' | 'starting' | 'downloading' | 'transcribing' | 'waiting'.
+  /// 'queued' | 'starting' | 'downloading' | 'transcribing' | 'waiting' |
+  /// 'restarting'.
   /// 'queued'  — waiting its turn behind other jobs.
   /// 'waiting' — the streaming connection dropped and we're polling the server
   ///             for the result it's still finishing in the background.
+  /// 'restarting' — the Mac came back without the job, so it's running again
+  ///             from the start.
   final String stage;
 
   /// Fraction (0..1) within the current stage; 0 means "no progress yet".
   final double progress;
+
+  /// We can't currently reach the Mac — most often its lid is closed.
+  ///
+  /// Deliberately separate from [stage] rather than replacing it: what the
+  /// user needs to know is which phase is paused and how far it got, and that
+  /// the work itself survives. The Mac suspends mid-job and carries on from
+  /// the same point when it wakes, so [stage] and [progress] stay put and the
+  /// UI can say "transcribing, paused at 34%" instead of discarding both.
+  final bool stalled;
 
   const TranscribeJob({
     required this.episode,
     required this.podcast,
     required this.stage,
     required this.progress,
+    this.stalled = false,
   });
 
   bool get isQueued => stage == 'queued';
 
-  TranscribeJob copyWith({String? stage, double? progress}) => TranscribeJob(
-    episode: episode,
-    podcast: podcast,
-    stage: stage ?? this.stage,
-    progress: progress ?? this.progress,
-  );
+  TranscribeJob copyWith({String? stage, double? progress, bool? stalled}) =>
+      TranscribeJob(
+        episode: episode,
+        podcast: podcast,
+        stage: stage ?? this.stage,
+        progress: progress ?? this.progress,
+        stalled: stalled ?? this.stalled,
+      );
 }
 
 /// Runs transcriptions through a single sequential queue: the Mac transcribes
@@ -190,7 +205,19 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
   void _setStage(int id, String stage, double progress) {
     final job = state[id];
     if (job == null) return;
-    state = {...state, id: job.copyWith(stage: stage, progress: progress)};
+    // Any fresh stage means we're hearing from the Mac again.
+    state = {
+      ...state,
+      id: job.copyWith(stage: stage, progress: progress, stalled: false),
+    };
+  }
+
+  /// Flags that the Mac is unreachable while keeping the phase and percentage,
+  /// so the UI can say which part is paused and how far it got.
+  void _setStalled(int id, bool stalled) {
+    final job = state[id];
+    if (job == null || job.stalled == stalled) return;
+    state = {...state, id: job.copyWith(stalled: stalled)};
   }
 
   Future<void> _pump() async {
@@ -255,7 +282,7 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
           // rather than waiting out a loop that can only end in silence.
           // Deliberately one retry: a second interruption propagates and is
           // reported, instead of looping forever on a Mac that keeps dying.
-          _setStage(episode.id, 'starting', 0);
+          _setStage(episode.id, 'restarting', 0);
           text = await client.transcribe(
             baseUrl: baseUrl,
             token: settings.token,
@@ -327,7 +354,11 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
     Episode episode,
     Podcast? podcast,
   ) async {
-    _setStage(episode.id, 'waiting', 0);
+    // Contact is lost at this point. Flag it but keep the phase and
+    // percentage: the Mac suspends mid-job and resumes from the same point, so
+    // "transcribing, paused at 34%" is both true and more useful than wiping
+    // the bar. A successful poll clears the flag on its own.
+    _setStalled(episode.id, true);
     // ~40 minutes of polling covers even very long episodes on the medium model.
     const interval = Duration(seconds: 10);
     var idlePolls = 0;
@@ -359,7 +390,8 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       } on _ServerLostJob {
         rethrow;
       } catch (_) {
-        // Transient network error while polling — keep trying.
+        // Still unreachable — keep the paused wording up, and keep trying.
+        _setStalled(episode.id, true);
       }
     }
     return null;

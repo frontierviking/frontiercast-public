@@ -152,7 +152,18 @@ class _TranscribingRow extends ConsumerWidget {
   final TranscribeJob job;
   const _TranscribingRow({required this.job});
 
-  ({String label, double? value}) _status() => switch (job.stage) {
+  ({String label, double? value}) _status() {
+    // Paused, not lost — keep the percentage so it's clear where it resumes.
+    if (job.stalled) {
+      final pct = job.progress > 0
+          ? ' ${(job.progress * 100).round()}%'
+          : '';
+      return (label: 'Paused$pct — Mac asleep', value: job.progress);
+    }
+    return _running();
+  }
+
+  ({String label, double? value}) _running() => switch (job.stage) {
     'queued' => (label: 'Queued', value: 0),
     'downloading' => (
       label: job.progress > 0
@@ -165,6 +176,7 @@ class _TranscribingRow extends ConsumerWidget {
       value: job.progress > 0 ? job.progress : null,
     ),
     'waiting' => (label: 'Finishing on Mac…', value: null),
+    'restarting' => (label: 'Restarting on Mac…', value: null),
     _ => (label: 'Starting…', value: null),
   };
 

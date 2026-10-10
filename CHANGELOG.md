@@ -7,6 +7,29 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-10
+
+### Added
+- When the Mac goes away mid-job, the phone now says **which phase is paused,
+  how far it got, that the work survives, and what to do** — instead of a bar
+  frozen at whatever percentage it reached.
+  - *"Paused — transcribing"* / *"Paused — fetching the audio"*, with:
+    "Your Mac stopped answering, usually because the lid is closed. Whisper
+    (34%) is paused, not lost — it carries on from here when you open it.
+    Nothing to do."
+  - The phase and percentage are kept rather than discarded, because that's
+    exactly where the Mac resumes: it suspends the job and continues from the
+    same point on wake.
+  - If the Mac comes back *without* the job: *"Starting over on your Mac"* —
+    "Your Mac came back without the job, so it is running again from the
+    beginning. Nothing to do."
+  - If contact is lost before any phase is known: "Open the lid and this picks
+    up on its own. If your Mac is already awake, check Wi-Fi or Tailscale."
+  - Downloads list shows "Paused 34% — Mac asleep".
+  Internally this is a `stalled` flag alongside `stage`, not a replacement for
+  it — overwriting the stage was what threw away the phase and progress the
+  message needs.
+
 ## [1.17.1] - 2026-10-10
 
 ### Fixed
