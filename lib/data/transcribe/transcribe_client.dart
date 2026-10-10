@@ -10,6 +10,16 @@ class TranscribeException implements Exception {
   String toString() => message;
 }
 
+/// How long the progress stream may go completely silent before the run is
+/// treated as interrupted.
+///
+/// The server emits download and whisper progress continuously, so real
+/// silence means the connection is dead — most often a Mac that went to sleep
+/// when its lid was closed, which stops sending without closing the socket.
+/// Short, because the fallback costs nothing: the caller polls instead, and a
+/// server that is still working reports the same progress.
+const _kStreamIdleTimeout = Duration(minutes: 2);
+
 /// The streaming connection ended (or dropped) before a final transcript
 /// arrived. The server keeps working and caches the result, so the caller
 /// should poll [TranscribeClient.pollTranscript] rather than treat this as a
@@ -138,9 +148,19 @@ class TranscribeClient {
 
     String? text;
     String? error;
+    // An idle timeout, not a total one: the run itself can legitimately take
+    // hours. A sleeping Mac stops sending without closing the socket, so
+    // without this the read blocks forever — and since the queue is strictly
+    // sequential, one such job leaves every other episode stuck on "queued".
+    // Treating silence as an interruption is cheap: the caller falls back to
+    // polling, which shows the same progress if the server is in fact alive.
     final lines = resp.stream
         .transform(utf8.decoder)
-        .transform(const LineSplitter());
+        .transform(const LineSplitter())
+        .timeout(
+          _kStreamIdleTimeout,
+          onTimeout: (sink) => sink.addError(const TranscribeInterrupted()),
+        );
     await for (final line in lines) {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;

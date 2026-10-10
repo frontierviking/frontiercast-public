@@ -7,6 +7,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.17.1] - 2026-10-10
+
+### Fixed
+- Closing the laptop mid-transcription no longer wedges the whole queue. A
+  sleeping Mac stops sending on the progress stream without closing the socket,
+  and the app's read had no inactivity timeout — so it waited indefinitely
+  (TCP wouldn't notice for two hours). Because the queue runs strictly one job
+  at a time, that single blocked job left every other episode showing "waiting
+  in queue" forever, and cancelling it didn't help.
+  The stream now treats two minutes of complete silence as an interruption and
+  falls back to the existing poll-to-recover path. That fallback is cheap: a
+  server that is still working reports the same progress, and one that lost the
+  job gets it resubmitted (1.17.0). The server itself already survives sleep —
+  it resumes on wake and finishes the run.
+
+
 ## [1.17.0] - 2026-10-01
 
 ### Fixed
