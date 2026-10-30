@@ -28,8 +28,18 @@ VERSION="$(grep '^version:' "$REPO/pubspec.yaml" | awk '{print $2}' | cut -d+ -f
 NAME="frontiercast-${VERSION}.apk"
 cp "$APK" "$SERVE_DIR/$NAME"
 
-TS_IP="$(tailscale ip -4 2>/dev/null | head -1)"
-[[ -n "$TS_IP" ]] || { echo "Tailscale isn't up on this Mac." >&2; exit 1; }
+# Prefer the tailnet address (works from anywhere), but the server binds
+# 0.0.0.0, so a LAN address serves the phone just as well when Tailscale is
+# down — which is exactly when you most need another way to deploy.
+# `|| true`: under `set -e` a failing command substitution aborts the script,
+# so a logged-out Tailscale killed this before the fallback below could run.
+TS_IP="$(tailscale ip -4 2>/dev/null | head -1)" || true
+if [[ -z "$TS_IP" ]]; then
+  TS_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)"
+  [[ -n "$TS_IP" ]] || { echo "No Tailscale and no LAN address on this Mac." >&2; exit 1; }
+  echo "  (Tailscale is down — serving on the LAN address instead;" >&2
+  echo "   the phone must be on the same Wi-Fi.)" >&2
+fi
 
 cat > "$SERVE_DIR/serve.py" <<'PY'
 import os, re, sys

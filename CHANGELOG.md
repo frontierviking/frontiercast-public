@@ -7,6 +7,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-10-30
+
+### Added
+- A **Stop** button on the transcript screen. Previously the only way to end a
+  running transcription was the Downloads tab, which is not where you are when
+  you're watching the progress bar. Reads "Remove from queue" for a job that
+  hasn't started yet.
+- Stopping explains what it did: "Stopped waiting. Your Mac finishes in the
+  background and keeps the result — tap Transcribe again to collect it."
+  Which is true, and worth saying: cancelling costs nothing, because the
+  server caches by guid and a later request returns the finished transcript
+  instantly rather than re-running Whisper.
+
+
 ## [1.18.0] - 2026-10-10
 
 ### Added

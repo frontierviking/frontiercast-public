@@ -244,6 +244,39 @@ class _TranscriptScreenState extends ConsumerState<TranscriptScreen> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 8),
+                          // Previously the only way out of a running job was
+                          // the Downloads tab, which is not where you are when
+                          // you're watching this bar.
+                          Center(
+                            child: TextButton.icon(
+                              icon: const Icon(Icons.stop_circle_outlined),
+                              label: Text(
+                                status.isQueued ? 'Remove from queue' : 'Stop',
+                              ),
+                              onPressed: () {
+                                ref
+                                    .read(transcribeControllerProvider.notifier)
+                                    .cancel(widget.episode.id);
+                                ScaffoldMessenger.maybeOf(context)
+                                  ?..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        status.isQueued
+                                            ? 'Removed from the queue.'
+                                            : 'Stopped waiting. Your Mac '
+                                                  'finishes in the background '
+                                                  'and keeps the result — '
+                                                  'tap Transcribe again to '
+                                                  'collect it.',
+                                      ),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                              },
+                            ),
+                          ),
                         ],
                       )
                     : Column(
