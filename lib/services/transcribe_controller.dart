@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,21 +32,61 @@ class _NoEndpointReachable implements Exception {
   const _NoEndpointReachable(this.tried);
 }
 
+/// Whether this phone is itself on the tailnet.
+///
+/// Worth knowing because it says *whose* end is broken. Tailscale's Android
+/// client puts a 100.64.0.0/10 address on a `tun` interface; carriers also
+/// hand out CGNAT addresses in that range, so the interface name has to match
+/// too or mobile data reads as a live tailnet.
+Future<bool> _phoneOnTailnet() async {
+  try {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLinkLocal: false,
+    ).timeout(const Duration(seconds: 3));
+    for (final ni in interfaces) {
+      if (!ni.name.startsWith('tun')) continue;
+      for (final addr in ni.addresses) {
+        final first = int.tryParse(addr.address.split('.').first) ?? 0;
+        final second = int.tryParse(addr.address.split('.')[1]) ?? 0;
+        if (first == 100 && second >= 64 && second <= 127) return true;
+      }
+    }
+  } catch (_) {
+    // Can't tell — fall back to the generic wording.
+  }
+  return false;
+}
+
 /// Turns a transcription failure into a message that says what to fix.
-String _transcribeErrorMessage(Object e) {
+///
+/// [phoneOnTailnet] lets the Tailscale cases name the right end. If this phone
+/// is on the tailnet and the Mac still doesn't answer, the Mac is the problem
+/// — and the cause here has twice been another VPN on the laptop silently
+/// logging Tailscale out, which is not something you'd guess from "Tailscale
+/// looks down".
+String _transcribeErrorMessage(Object e, {bool phoneOnTailnet = false}) {
   if (e is _NoEndpointReachable) {
     if (e.tried.isEmpty) {
       return 'No transcription server address configured — set one in '
           'Settings → Transcription.';
     }
+    final macEndAdvice =
+        "Your phone is on Tailscale, so it's the Mac's end that's down. "
+        'A VPN running on the laptop (ExpressVPN, for example) logs Tailscale '
+        'out — turn the VPN off there. Or put this phone on home Wi-Fi.';
     final routes = e.tried.join(' and ');
     if (e.tried.length > 1) {
+      if (phoneOnTailnet) {
+        return "Can't reach your Mac on $routes. $macEndAdvice";
+      }
       return "Can't reach your Mac on $routes. Check Tailscale is connected "
           "(or that you're on home Wi-Fi and the server is running).";
     }
     if (e.tried.first == 'Tailscale') {
-      return "Can't reach your Mac over Tailscale — Tailscale looks down. "
-          'Reconnect it on your phone, or switch to Wi-Fi/LAN in Settings.';
+      if (phoneOnTailnet) return "Can't reach your Mac. $macEndAdvice";
+      return "Can't reach your Mac over Tailscale — Tailscale looks down on "
+          'this phone. Reconnect it here, or switch to Wi-Fi/LAN in Settings.';
     }
     return "Can't reach your Mac over Wi-Fi / LAN — check you're on home "
         'Wi-Fi and the server is running, or switch to Tailscale in Settings.';
@@ -304,7 +345,10 @@ class TranscribeController extends Notifier<Map<int, TranscribeJob>> {
       // A failed job shouldn't stall the queue, but the user needs to know why
       // rather than watching it silently vanish.
       ref.read(transcribeErrorProvider.notifier).state = (
-        message: _transcribeErrorMessage(e),
+        message: _transcribeErrorMessage(
+          e,
+          phoneOnTailnet: await _phoneOnTailnet(),
+        ),
         at: DateTime.now(),
       );
     } finally {

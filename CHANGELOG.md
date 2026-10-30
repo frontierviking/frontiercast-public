@@ -7,6 +7,26 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-30
+
+### Changed
+- "Can't reach your Mac" now names **whose end is down**, and says what to do
+  about it. The app checks whether this phone is itself on the tailnet (a
+  100.64.0.0/10 address on a `tun` interface — the interface name matters,
+  since carriers hand out CGNAT addresses in that range too). If the phone is
+  on Tailscale and the Mac still doesn't answer, the Mac is necessarily the
+  problem, and the message says so:
+
+  > Your phone is on Tailscale, so it's the Mac's end that's down. A VPN
+  > running on the laptop (ExpressVPN, for example) logs Tailscale out — turn
+  > the VPN off there. Or put this phone on home Wi-Fi.
+
+  Twice now a VPN on the Mac has silently logged Tailscale out, and the old
+  wording ("Tailscale looks down — reconnect it on your phone") pointed at the
+  wrong device entirely. When the phone genuinely isn't on the tailnet, it now
+  says "down on this phone" rather than leaving that ambiguous.
+
+
 ## [1.18.1] - 2026-10-30
 
 ### Added
